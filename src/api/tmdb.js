@@ -62,16 +62,72 @@ export async function searchMovies(query) {
   return data.results.filter((m) => m.poster_path || m.backdrop_path)
 }
 
-// Full detail payload for the modal: overview, runtime, genres, cast and reviews
-// all in one request via TMDB's append_to_response.
+// Full detail payload for the modal: overview, runtime, genres, cast, reviews and
+// streaming availability all in one request via TMDB's append_to_response.
 const detailsCache = new Map()
 export async function fetchMovieDetails(movieId) {
   if (detailsCache.has(movieId)) return detailsCache.get(movieId)
   const data = await get(`/movie/${movieId}`, {
-    append_to_response: 'credits,reviews',
+    append_to_response: 'credits,reviews,watch/providers',
   })
   detailsCache.set(movieId, data)
   return data
+}
+
+// Countries offered in the "Where to watch" picker. Availability is licensed
+// per territory, so the same film streams in one country and doesn't in another.
+export const WATCH_REGIONS = [
+  { code: 'IN', label: 'India' },
+  { code: 'US', label: 'United States' },
+  { code: 'GB', label: 'United Kingdom' },
+  { code: 'CA', label: 'Canada' },
+  { code: 'AU', label: 'Australia' },
+  { code: 'AE', label: 'UAE' },
+  { code: 'SG', label: 'Singapore' },
+  { code: 'DE', label: 'Germany' },
+  { code: 'FR', label: 'France' },
+  { code: 'JP', label: 'Japan' },
+]
+
+// Normalises TMDB's per-region provider payload into the four buckets we render.
+// Returns null when the film has no listing in that country at all.
+export function providersForRegion(results, region) {
+  const r = results?.[region]
+  if (!r) return null
+  const buckets = {
+    link: r.link,
+    stream: r.flatrate || [],
+    free: [...(r.free || []), ...(r.ads || [])],
+    rent: r.rent || [],
+    buy: r.buy || [],
+  }
+  const total =
+    buckets.stream.length + buckets.free.length + buckets.rent.length + buckets.buy.length
+  return total ? buckets : null
+}
+
+// The modal already has the full payload from append_to_response.
+export function watchProviders(details, region) {
+  return providersForRegion(details?.['watch/providers']?.results, region)
+}
+
+// Cards only have list data, so they need their own lookup. This endpoint returns
+// every region for one film in a small payload, and the cache means switching
+// country never refetches. Cards request it lazily as they scroll into view.
+const providerCache = new Map()
+export function fetchWatchProviders(movieId) {
+  if (!providerCache.has(movieId)) {
+    providerCache.set(
+      movieId,
+      get(`/movie/${movieId}/watch/providers`)
+        .then((d) => d.results || {})
+        .catch(() => {
+          providerCache.delete(movieId) // let a later card retry
+          return {}
+        })
+    )
+  }
+  return providerCache.get(movieId)
 }
 
 // Letterboxd has no public API, but this redirect resolves a TMDB id to the

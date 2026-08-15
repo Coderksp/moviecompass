@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { IMG, fetchMovieDetails, letterboxdUrl } from '../api/tmdb'
+import {
+  IMG,
+  fetchMovieDetails,
+  letterboxdUrl,
+  watchProviders,
+  WATCH_REGIONS,
+} from '../api/tmdb'
+import { useRegion, setRegion } from '../region'
 
 export default function MovieModal({ movie, onClose }) {
   const [details, setDetails] = useState(null)
@@ -142,6 +149,9 @@ export default function MovieModal({ movie, onClose }) {
                 </p>
               )}
 
+              {/* Where to watch */}
+              <WhereToWatch details={details} loading={loading} />
+
               {/* Cast */}
               {cast.length > 0 && (
                 <div style={{ marginBottom: 26 }}>
@@ -195,6 +205,109 @@ export default function MovieModal({ movie, onClose }) {
         </motion.div>
       )}
     </AnimatePresence>
+  )
+}
+
+function WhereToWatch({ details, loading }) {
+  const region = useRegion()
+  const providers = details ? watchProviders(details, region) : null
+  const regionName =
+    WATCH_REGIONS.find((r) => r.code === region)?.label || region
+
+  return (
+    <div style={{ marginBottom: 26 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 12, flexWrap: 'wrap', marginBottom: 12,
+      }}>
+        <h3 style={{ ...sectionTitle, marginBottom: 0 }}>Where to watch</h3>
+        <select
+          value={region}
+          onChange={(e) => setRegion(e.target.value)}
+          aria-label="Country for streaming availability"
+          style={{
+            padding: '5px 10px', borderRadius: 999, fontSize: 13,
+            background: 'rgba(26,16,41,0.8)', color: 'var(--text)',
+            border: '1px solid rgba(168,85,247,0.35)',
+          }}
+        >
+          {WATCH_REGIONS.map((r) => (
+            <option key={r.code} value={r.code}>{r.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {loading && (
+        <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>
+          Checking availability…
+        </p>
+      )}
+
+      {!loading && !providers && (
+        <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>
+          Not listed on any service in {regionName} right now. Try another country.
+        </p>
+      )}
+
+      {providers && (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <ProviderRow label="Stream" items={providers.stream} link={providers.link} />
+            <ProviderRow label="Free with ads" items={providers.free} link={providers.link} />
+            <ProviderRow label="Rent" items={providers.rent} link={providers.link} />
+            <ProviderRow label="Buy" items={providers.buy} link={providers.link} />
+          </div>
+          <a
+            href={providers.link}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'inline-block', marginTop: 12,
+              fontSize: 12.5, color: 'var(--text-dim)', textDecoration: 'none',
+            }}
+          >
+            Prices and links on JustWatch ↗
+          </a>
+        </>
+      )}
+    </div>
+  )
+}
+
+function ProviderRow({ label, items, link }) {
+  if (!items.length) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <span style={{
+        minWidth: 92, fontSize: 12, letterSpacing: '0.06em',
+        textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 600,
+      }}>
+        {label}
+      </span>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {items.map((p) => (
+          <a
+            key={p.provider_id}
+            href={link}
+            target="_blank"
+            rel="noreferrer"
+            title={`${p.provider_name} — ${label.toLowerCase()}`}
+            style={{
+              display: 'block', width: 38, height: 38, borderRadius: 10,
+              overflow: 'hidden', border: '1px solid rgba(168,85,247,0.25)',
+              background: 'var(--surface)',
+            }}
+          >
+            <img
+              src={IMG(p.logo_path, 'w92')}
+              alt={p.provider_name}
+              loading="lazy"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            />
+          </a>
+        ))}
+      </div>
+    </div>
   )
 }
 

@@ -1,14 +1,29 @@
 import { useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { IMG, fetchTrailerKey } from '../api/tmdb'
+import {
+  IMG,
+  fetchTrailerKey,
+  fetchWatchProviders,
+  providersForRegion,
+} from '../api/tmdb'
 import { useOpenMovie } from '../movieModal'
+import { useRegion } from '../region'
 
 export default function MovieCard({ movie, index }) {
   const [hovered, setHovered] = useState(false)
   const [trailerKey, setTrailerKey] = useState(null)
   const [showFrame, setShowFrame] = useState(false)
+  const [providers, setProviders] = useState(null)
   const hoverTimer = useRef(null)
   const openMovie = useOpenMovie()
+  const region = useRegion()
+
+  // Only the services a subscription already covers — rent and buy are noise at
+  // card size, and the modal covers them properly.
+  const forRegion = providers ? providersForRegion(providers, region) : null
+  const streaming = forRegion
+    ? [...forRegion.stream, ...forRegion.free].slice(0, 3)
+    : []
 
   const year = movie.release_date ? movie.release_date.slice(0, 4) : ''
   const rating = movie.vote_average ? movie.vote_average.toFixed(1) : null
@@ -41,6 +56,10 @@ export default function MovieCard({ movie, index }) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-40px' }}
       transition={{ duration: 0.5, delay: (index % 8) * 0.04 }}
+      // Providers are one request per film, so only ask for the ones actually seen.
+      onViewportEnter={() => {
+        if (!providers) fetchWatchProviders(movie.id).then(setProviders)
+      }}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
       onClick={() => openMovie(movie)}
@@ -68,6 +87,34 @@ export default function MovieCard({ movie, index }) {
         loading="lazy"
         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
       />
+
+      {/* Streaming badges — the at-a-glance "this is already in my subscription" */}
+      {streaming.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, x: -6 }}
+          animate={{ opacity: showFrame ? 0 : 1, x: 0 }}
+          transition={{ duration: 0.3 }}
+          style={{
+            position: 'absolute', top: 10, left: 10,
+            display: 'flex', gap: 5, pointerEvents: 'none',
+          }}
+        >
+          {streaming.map((p) => (
+            <img
+              key={p.provider_id}
+              src={IMG(p.logo_path, 'w92')}
+              alt={p.provider_name}
+              title={`Streaming on ${p.provider_name}`}
+              loading="lazy"
+              style={{
+                width: 26, height: 26, borderRadius: 7, display: 'block',
+                border: '1px solid rgba(255,255,255,0.25)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.55)',
+              }}
+            />
+          ))}
+        </motion.div>
+      )}
 
       {/* Inline trailer that fades in on hover */}
       <AnimatePresence>
