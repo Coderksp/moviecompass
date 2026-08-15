@@ -6,13 +6,15 @@
 // VITE_API_ORIGIN lets a local dev server borrow a deployed proxy. Leave it
 // unset in production, where the relative path is what you want.
 const ORIGIN = import.meta.env.VITE_API_ORIGIN || ''
-const BASE = `${ORIGIN}/api/tmdb`
 
 export const IMG = (path, size = 'w500') =>
-  path ? `${ORIGIN}/api/img/${size}${path}` : ''
+  path
+    ? `${ORIGIN}/api/img?path=${encodeURIComponent(`/${size}${path}`)}`
+    : ''
 
 async function get(path, params = {}) {
-  const url = new URL(BASE + path, window.location.origin)
+  const url = new URL(`${ORIGIN}/api/tmdb`, window.location.origin)
+  url.searchParams.set('path', path)
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
   const res = await fetch(url)
   if (!res.ok) {

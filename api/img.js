@@ -4,17 +4,16 @@
 const IMAGES = 'https://image.tmdb.org/t/p'
 
 export default async function handler(req, res) {
-  const segments = req.query.path
-  const parts = (Array.isArray(segments) ? segments : [segments]).filter(Boolean)
+  const { path = '' } = req.query
 
   // The host is fixed, so this can only ever reach TMDB — but reject traversal
-  // segments anyway rather than relying on URL normalisation to save us.
-  if (parts.some((p) => p === '..' || p.includes('\\'))) {
+  // rather than relying on URL normalisation to save us.
+  if (typeof path !== 'string' || !path.startsWith('/') || path.includes('..')) {
     return res.status(400).json({ error: 'Invalid image path.' })
   }
 
   try {
-    const upstream = await fetch(`${IMAGES}/${parts.join('/')}`)
+    const upstream = await fetch(IMAGES + path)
     if (!upstream.ok) return res.status(upstream.status).end()
 
     const buf = Buffer.from(await upstream.arrayBuffer())
