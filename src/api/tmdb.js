@@ -1,20 +1,26 @@
-const API_KEY = import.meta.env.VITE_TMDB_API_KEY
-const BASE = 'https://api.themoviedb.org/3'
+// Everything goes through our own serverless proxy (see /api) rather than
+// straight to TMDB. The key stays on the server, and requests are made from
+// Vercel — which matters because some ISPs block themoviedb.org outright, so a
+// direct browser call fails for those visitors.
+//
+// VITE_API_ORIGIN lets a local dev server borrow a deployed proxy. Leave it
+// unset in production, where the relative path is what you want.
+const ORIGIN = import.meta.env.VITE_API_ORIGIN || ''
+const BASE = `${ORIGIN}/api/tmdb`
 
 export const IMG = (path, size = 'w500') =>
-  path ? `https://image.tmdb.org/t/p/${size}${path}` : ''
+  path ? `${ORIGIN}/api/img/${size}${path}` : ''
 
 async function get(path, params = {}) {
-  if (!API_KEY) {
-    throw new Error(
-      'Missing TMDB API key. Copy .env.example to .env and add VITE_TMDB_API_KEY.'
-    )
-  }
-  const url = new URL(BASE + path)
-  url.searchParams.set('api_key', API_KEY)
+  const url = new URL(BASE + path, window.location.origin)
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
   const res = await fetch(url)
-  if (!res.ok) throw new Error(`TMDB request failed (${res.status})`)
+  if (!res.ok) {
+    // The proxy explains itself on failure (missing key, TMDB unreachable);
+    // fall back to the status code when there's no message to show.
+    const detail = await res.json().catch(() => null)
+    throw new Error(detail?.error || `TMDB request failed (${res.status})`)
+  }
   return res.json()
 }
 
