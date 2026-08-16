@@ -4,7 +4,8 @@ import {
   IMG,
   fetchMovieDetails,
   fetchTrailerKey,
-  letterboxdUrl,
+  externalUrl,
+  lengthLabel,
   watchProviders,
   WATCH_REGIONS,
 } from '../api/tmdb'
@@ -22,7 +23,7 @@ export default function MovieModal({ movie, onClose }) {
     let cancelled = false
     setDetails(null)
     setLoading(true)
-    fetchMovieDetails(movie.id)
+    fetchMovieDetails(movie.id, movie.mediaType)
       .then((d) => { if (!cancelled) setDetails(d) })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -36,7 +37,7 @@ export default function MovieModal({ movie, onClose }) {
     let cancelled = false
     setTrailerKey(null)
     setPlaying(false)
-    fetchTrailerKey(movie.id)
+    fetchTrailerKey(movie.id, movie.mediaType)
       .then((k) => { if (!cancelled) setTrailerKey(k) })
       .catch(() => {})
     return () => { cancelled = true }
@@ -58,9 +59,9 @@ export default function MovieModal({ movie, onClose }) {
   const data = details || movie || {}
   const year = data.release_date ? data.release_date.slice(0, 4) : ''
   const rating = data.vote_average ? data.vote_average.toFixed(1) : null
-  const runtime = data.runtime
-    ? `${Math.floor(data.runtime / 60)}h ${data.runtime % 60}m`
-    : null
+  // Films report a runtime; series report seasons and episodes.
+  const runtime = lengthLabel(data)
+  const link = externalUrl(data)
   const genres = data.genres || []
   const cast = details?.credits?.cast?.slice(0, 6) || []
   const reviews = details?.reviews?.results || []
@@ -258,7 +259,7 @@ export default function MovieModal({ movie, onClose }) {
               </div>
 
               <a
-                href={letterboxdUrl(data.id)}
+                href={link.href}
                 target="_blank"
                 rel="noreferrer"
                 style={{
@@ -268,7 +269,7 @@ export default function MovieModal({ movie, onClose }) {
                   color: '#fff', fontWeight: 600, fontSize: 14, textDecoration: 'none',
                 }}
               >
-                View on Letterboxd ↗
+                {link.label} ↗
               </a>
             </div>
           </motion.div>

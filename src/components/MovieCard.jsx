@@ -27,13 +27,14 @@ export default function MovieCard({ movie, index }) {
 
   const year = movie.release_date ? movie.release_date.slice(0, 4) : ''
   const rating = movie.vote_average ? movie.vote_average.toFixed(1) : null
+  const isSeries = movie.mediaType === 'tv'
 
   const onEnter = useCallback(() => {
     setHovered(true)
     // Small delay so quickly scanning the mouse across cards doesn't fire trailers.
     hoverTimer.current = setTimeout(async () => {
       try {
-        const key = await fetchTrailerKey(movie.id)
+          const key = await fetchTrailerKey(movie.id, movie.mediaType)
         if (key) {
           setTrailerKey(key)
           setShowFrame(true)
@@ -58,7 +59,7 @@ export default function MovieCard({ movie, index }) {
       transition={{ duration: 0.5, delay: (index % 8) * 0.04 }}
       // Providers are one request per film, so only ask for the ones actually seen.
       onViewportEnter={() => {
-        if (!providers) fetchWatchProviders(movie.id).then(setProviders)
+        if (!providers) fetchWatchProviders(movie.id, movie.mediaType).then(setProviders)
       }}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
@@ -87,6 +88,26 @@ export default function MovieCard({ movie, index }) {
         loading="lazy"
         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
       />
+
+      {/* Type marker, so a mixed grid never leaves you guessing. Films carry no
+          badge — they are the default, and labelling both would be noise. */}
+      {isSeries && (
+        <motion.span
+          animate={{ opacity: showFrame ? 0 : 1 }}
+          transition={{ duration: 0.3 }}
+          style={{
+            position: 'absolute', top: 10, right: 10, zIndex: 1,
+            padding: '3px 8px', borderRadius: 6,
+            fontSize: 9.5, fontWeight: 700, letterSpacing: '0.09em',
+            textTransform: 'uppercase', pointerEvents: 'none',
+            color: '#fff', background: 'rgba(10,6,18,0.72)',
+            backdropFilter: 'blur(6px)',
+            border: '1px solid rgba(0,229,255,0.45)',
+          }}
+        >
+          Series
+        </motion.span>
+      )}
 
       {/* Streaming badges — the at-a-glance "this is already in my subscription" */}
       {streaming.length > 0 && (
