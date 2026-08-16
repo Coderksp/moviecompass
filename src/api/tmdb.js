@@ -98,6 +98,41 @@ export const industryLang = (id) =>
 export const matchesIndustry = (item, lang) =>
   !lang || item.original_language === lang
 
+// Browsing by language, with no search behind it. The chips could only ever
+// narrow an existing result set before, which meant you had to think of
+// something to search before you could ask "what Tamil films are there".
+//
+// media is 'all' | 'movie' | 'tv'. For 'all' both are fetched and interleaved,
+// so one type does not simply sit above the other.
+export async function discoverByLanguage(lang, media = 'all', page = 1) {
+  if (!lang) return []
+  const params = {
+    with_original_language: lang,
+    sort_by: 'popularity.desc',
+    page,
+    // Titles nobody has rated are usually incomplete records rather than
+    // discoveries, and they crowd out the real answers.
+    'vote_count.gte': 10,
+  }
+  const wanted = media === 'all' ? ['movie', 'tv'] : [media]
+  const lists = await Promise.all(
+    wanted.map((type) =>
+      get(`/discover/${type}`, params)
+        .then((d) => (d.results || []).filter(hasArt).map((m) => normalize(m, type)))
+        .catch(() => [])
+    )
+  )
+  if (lists.length === 1) return lists[0]
+
+  const [films, series] = lists
+  const mixed = []
+  for (let i = 0; i < Math.max(films.length, series.length); i++) {
+    if (films[i]) mixed.push(films[i])
+    if (series[i]) mixed.push(series[i])
+  }
+  return mixed
+}
+
 // One request returns titles and people both. Titles feed the grid; people feed
 // the actor row, which is why they are kept rather than discarded.
 export async function searchMulti(query) {

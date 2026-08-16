@@ -39,35 +39,9 @@ export default function SearchResults({
 
       {person && stats && <ActorStats person={person} stats={stats} />}
 
-      {/* Industry is the original language of a title, so this narrows any set
-          on screen — search results or an actor's filmography alike. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '14px 0 22px' }}>
-        {INDUSTRIES.map((ind) => {
-          const active = ind.id === industry
-          return (
-            <button
-              key={ind.id}
-              onClick={() => onIndustry(ind.id)}
-              aria-pressed={active}
-              title={ind.note}
-              style={{
-                padding: '5px 14px', borderRadius: 999, cursor: 'pointer',
-                fontSize: 13, fontWeight: 600,
-                color: active ? '#fff' : 'var(--text-dim)',
-                background: active
-                  ? 'linear-gradient(100deg, var(--magenta), var(--violet))'
-                  : 'rgba(26,16,41,0.7)',
-                border: active
-                  ? '1px solid transparent'
-                  : '1px solid rgba(168,85,247,0.25)',
-                transition: 'color .2s, background .2s, border-color .2s',
-              }}
-            >
-              {ind.label}
-            </button>
-          )
-        })}
-      </div>
+      {/* The industry chips used to live here. They moved to the filter bar so
+          they can be browsed with rather than only narrowing an existing search;
+          duplicating them would give two controls for one piece of state. */}
 
       {/* Matching actors, offered before the titles — searching a name usually
           means "what else are they in", which a title grid can't answer. */}

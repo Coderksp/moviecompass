@@ -5,14 +5,18 @@ import Hero from './components/Hero'
 import Row from './components/Row'
 import SearchResults from './components/SearchResults'
 import MovieModal from './components/MovieModal'
+import MovieCard from './components/MovieCard'
 import { MovieModalContext, OpenPersonContext, RequestSignInContext } from './movieModal'
 import SignIn from './components/SignIn'
 import { useSession } from './auth'
 import { useLibrary, loadLibrary, clearLibrary } from './library'
-import { fetchMovieDetails } from './api/tmdb'
+import { fetchMovieDetails, IMG } from './api/tmdb'
 import {
   CATEGORIES,
+  INDUSTRIES,
   MEDIA_FILTERS,
+  discoverByLanguage,
+  searchMulti as searchPeopleFor,
   fetchCategory,
   fetchFeatured,
   fetchPersonCredits,
@@ -28,6 +32,9 @@ export default function App() {
   const session = useSession()
   const library = useLibrary()
   const [signInOpen, setSignInOpen] = useState(false)
+  const [castPickerOpen, setCastPickerOpen] = useState(false)
+  const [browse, setBrowse] = useState([])
+  const [browsing, setBrowsing] = useState(false)
 
   // Close the panel once a session exists, whichever route got us there —
   // the password form, or coming back from Google.
@@ -127,6 +134,22 @@ export default function App() {
     (r) => (media === 'all' || r.mediaType === media) && matchesIndustry(r, lang)
   )
 
+  // Browsing a language with nothing else narrowing it: no query typed, no actor
+  // chosen. Otherwise the existing result set is filtered client-side instead,
+  // which is cheaper and keeps the actor's ordering intact.
+  const browseMode = !query.trim() && !person && industry !== 'all'
+
+  useEffect(() => {
+    if (!browseMode) { setBrowse([]); return }
+    let cancelled = false
+    setBrowsing(true)
+    discoverByLanguage(lang, media)
+      .then((rows) => { if (!cancelled) setBrowse(rows) })
+      .catch(() => { if (!cancelled) setBrowse([]) })
+      .finally(() => { if (!cancelled) setBrowsing(false) })
+    return () => { cancelled = true }
+  }, [browseMode, lang, media])
+
   // Computed from the unfiltered credits — these are career totals, not a count
   // of whatever survives the filters below.
   const stats = person && credits.length ? personStats(credits, ratings) : null
@@ -152,7 +175,22 @@ export default function App() {
         </div>
       )}
 
-      <MediaFilter value={media} onChange={setMedia} />
+      <MediaFilter
+        value={media}
+        onChange={setMedia}
+        industry={industry}
+        onIndustry={setIndustry}
+        person={person}
+        onClearPerson={() => setPerson(null)}
+        onPickPerson={() => setCastPickerOpen(true)}
+      />
+
+      {castPickerOpen && (
+        <CastPicker
+          onPick={(p) => { setCastPickerOpen(false); openPerson(p) }}
+          onClose={() => setCastPickerOpen(false)}
+        />
+      )}
 
       {/* Deliberately not mode="wait": that mounts the incoming view only once
           the outgoing one has finished exiting, and exits in this tree do not
@@ -179,6 +217,17 @@ export default function App() {
           <motion.main key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <Hero movie={featured} />
             <div style={{ marginTop: '-2rem', position: 'relative', zIndex: 2 }}>
+              {/* A language chosen with nothing else narrowing it replaces the
+                  rails: the question is "what is there", not "what is popular". */}
+              {browseMode ? (
+                <BrowseGrid
+                  label={INDUSTRIES.find((i) => i.id === industry)?.label}
+                  note={INDUSTRIES.find((i) => i.id === industry)?.note}
+                  items={browse}
+                  loading={browsing}
+                />
+              ) : (
+                <>
               {/* Your own rails first — what you saved outranks what is trending. */}
               <LibraryRow title="Your watchlist" field="watchlist" library={library} />
               <LibraryRow title="Your favourites" field="favourite" library={library} />
@@ -190,6 +239,8 @@ export default function App() {
                   anchorId={cat.id}
                 />
               ))}
+                </>
+              )}
             </div>
             {loading && (
               <p style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem' }}>
@@ -292,6 +343,160 @@ function SignatureFooter() {
   )
 }
 
+// Everything in a language, rather than rails of what happens to be popular.
+function BrowseGrid({ label, note, items, loading }) {
+  return (
+    <section style={{ padding: '1rem clamp(1rem, 4vw, 3rem) 2rem', minHeight: '60vh' }}>
+      <h2 style={{
+        fontFamily: 'var(--font-display)', fontWeight: 800,
+        fontSize: 'clamp(1.3rem, 3vw, 2rem)', marginBottom: 4,
+      }}>
+        <span className="grad-text">{label}</span>
+      </h2>
+      <p style={{ color: 'var(--text-dim)', fontSize: 13.5, margin: '0 0 20px' }}>
+        {note} · most popular first
+      </p>
+
+      {loading && !items.length && (
+        <p style={{ color: 'var(--text-dim)', fontSize: 15 }}>Finding titles…</p>
+      )}
+      {!loading && !items.length && (
+        <p style={{ color: 'var(--text-dim)', fontSize: 15 }}>
+          Nothing found in {label}. Try another language, or switch back to All.
+        </p>
+      )}
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+        gap: 18,
+      }}>
+        {items.map((m, i) => (
+          <MovieCard key={`${m.mediaType}-${m.id}`} movie={m} index={i} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// Choosing an actor without having to search for one first. The same lookup the
+// search box uses, just scoped to people.
+function CastPicker({ onPick, onClose }) {
+  const [term, setTerm] = useState('')
+  const [people, setPeople] = useState([])
+  const [searching, setSearching] = useState(false)
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  useEffect(() => {
+    if (term.trim().length < 2) { setPeople([]); return }
+    let cancelled = false
+    setSearching(true)
+    const t = setTimeout(() => {
+      searchPeopleFor(term)
+        .then(({ people: found }) => { if (!cancelled) setPeople(found) })
+        .catch(() => { if (!cancelled) setPeople([]) })
+        .finally(() => { if (!cancelled) setSearching(false) })
+    }, 250)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [term])
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 400, display: 'grid',
+        placeItems: 'start center', padding: 'clamp(1rem, 8vh, 5rem) 1rem',
+        background: 'rgba(5,3,10,0.72)', backdropFilter: 'blur(8px)', overflowY: 'auto',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 'min(420px, 100%)', background: 'var(--bg-soft)',
+          border: '1px solid rgba(168,85,247,0.22)', borderRadius: 18,
+          padding: 20, boxShadow: '0 30px 80px -24px rgba(0,0,0,0.8)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17 }}>
+            Filter by cast
+          </h3>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              marginLeft: 'auto', width: 28, height: 28, borderRadius: '50%',
+              border: '1px solid rgba(255,255,255,0.18)', cursor: 'pointer',
+              background: 'rgba(10,6,18,0.6)', color: 'var(--text)', fontSize: 16,
+              display: 'grid', placeItems: 'center',
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        <input
+          autoFocus
+          value={term}
+          onChange={(e) => setTerm(e.target.value)}
+          placeholder="Actor's name…"
+          style={{
+            width: '100%', padding: '11px 14px', borderRadius: 10,
+            border: '1px solid rgba(168,85,247,0.28)', background: 'rgba(10,6,18,0.6)',
+            color: 'var(--text)', fontSize: 14.5, marginBottom: 12,
+          }}
+        />
+
+        {searching && <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>Searching…</p>}
+        {!searching && term.trim().length >= 2 && !people.length && (
+          <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>No actors by that name.</p>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {people.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => onPick(p)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 11, padding: 7,
+                borderRadius: 10, border: 'none', background: 'none',
+                cursor: 'pointer', color: 'inherit', textAlign: 'left',
+              }}
+            >
+              <span style={{
+                width: 38, height: 38, borderRadius: '50%', flex: 'none',
+                overflow: 'hidden', background: 'var(--surface)',
+                border: '1px solid rgba(168,85,247,0.3)',
+              }}>
+                {p.profile_path && (
+                  <img
+                    src={IMG(p.profile_path, 'w185')}
+                    alt=""
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                )}
+              </span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{p.name}</span>
+                {p.knownFor?.length > 0 && (
+                  <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text-dim)' }}>
+                    {p.knownFor.join(', ')}
+                  </span>
+                )}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // A rail built from saved ids. Only ids are stored, so each title is hydrated
 // through the cached details endpoint — a poster that changes upstream is never
 // frozen here, and there is no second copy of the catalogue to keep in step.
@@ -323,12 +528,14 @@ function LibraryRow({ title, field, library }) {
   return <Row title={title} movies={items} anchorId={`lib-${field}`} />
 }
 
-// Sits under the navbar and drives both the rails and the search results.
-function MediaFilter({ value, onChange }) {
+// Sits under the navbar and drives the rails, the browse grid and the search
+// results alike. Language and cast live here rather than inside the search view,
+// because a filter that only appears after searching cannot be browsed with.
+function MediaFilter({ value, onChange, industry, onIndustry, person, onClearPerson, onPickPerson }) {
   return (
     <div style={{
       position: 'sticky', top: 68, zIndex: 90,
-      display: 'flex', justifyContent: 'center', gap: 6,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
       padding: '0.75rem 1rem 0.25rem',
     }}>
       <div style={{
@@ -357,6 +564,69 @@ function MediaFilter({ value, onChange }) {
             </button>
           )
         })}
+      </div>
+
+      <div style={{
+        display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center',
+        maxWidth: 940,
+      }}>
+        {INDUSTRIES.map((ind) => {
+          const active = ind.id === industry
+          return (
+            <button
+              key={ind.id}
+              onClick={() => onIndustry(ind.id)}
+              aria-pressed={active}
+              title={ind.note}
+              style={{
+                padding: '4px 12px', borderRadius: 999, cursor: 'pointer',
+                fontSize: 12.5, fontWeight: 600,
+                color: active ? '#fff' : 'var(--text-dim)',
+                background: active
+                  ? 'linear-gradient(100deg, var(--magenta), var(--violet))'
+                  : 'rgba(10,6,18,0.7)',
+                border: active ? '1px solid transparent' : '1px solid rgba(168,85,247,0.22)',
+                backdropFilter: 'blur(10px)',
+                transition: 'color .2s, background .2s, border-color .2s',
+              }}
+            >
+              {ind.label}
+            </button>
+          )
+        })}
+
+        {/* The chosen actor reads as a removable chip rather than another
+            toggle, since it is one value and clearing it is the only option. */}
+        {person ? (
+          <button
+            onClick={onClearPerson}
+            title={`Stop filtering by ${person.name}`}
+            style={{
+              padding: '4px 10px 4px 12px', borderRadius: 999, cursor: 'pointer',
+              fontSize: 12.5, fontWeight: 600, color: '#fff',
+              background: 'rgba(0,229,255,0.18)',
+              border: '1px solid rgba(0,229,255,0.5)',
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+            }}
+          >
+            {person.name}
+            <span aria-hidden="true" style={{ opacity: 0.7, fontSize: 14 }}>×</span>
+          </button>
+        ) : (
+          <button
+            onClick={onPickPerson}
+            title="Filter by an actor"
+            style={{
+              padding: '4px 12px', borderRadius: 999, cursor: 'pointer',
+              fontSize: 12.5, fontWeight: 600, color: 'var(--text-dim)',
+              background: 'rgba(10,6,18,0.7)',
+              border: '1px dashed rgba(168,85,247,0.4)',
+              backdropFilter: 'blur(10px)',
+            }}
+          >
+            + Cast
+          </button>
+        )}
       </div>
     </div>
   )
