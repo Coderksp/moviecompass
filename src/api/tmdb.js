@@ -131,10 +131,15 @@ const SORTS = {
 //
 // media is 'all' | 'movie' | 'tv'. For 'all' both are fetched and interleaved,
 // so one type does not simply sit above the other.
+export const byTitle = (a, b) =>
+  (a.title || '').localeCompare(b.title || '', undefined, { numeric: true, sensitivity: 'base' })
+
+// Returns { items, hasMore } — hasMore so a "Load more" can disappear at the end
+// rather than fetching nothing and looking broken.
 export async function discoverByLanguage(lang, media = 'all', sort = 'popular', page = 1) {
-  if (!lang) return []
+  if (!lang) return { items: [], hasMore: false }
   const wanted = media === 'all' ? ['movie', 'tv'] : [media]
-  const lists = await Promise.all(
+  const pages = await Promise.all(
     wanted.map((type) =>
       get(`/discover/${type}`, {
         with_original_language: lang,
@@ -144,28 +149,38 @@ export async function discoverByLanguage(lang, media = 'all', sort = 'popular', 
         // discoveries, and they crowd out the real answers.
         'vote_count.gte': 10,
       })
-        .then((d) => (d.results || []).filter(hasArt).map((m) => normalize(m, type)))
-        .catch(() => [])
+        .then((d) => ({
+          items: (d.results || []).filter(hasArt).map((m) => normalize(m, type)),
+          hasMore: page < (d.total_pages || 1),
+        }))
+        .catch(() => ({ items: [], hasMore: false }))
     )
   )
-  if (lists.length === 1) return lists[0]
 
-  const [films, series] = lists
-  // Interleaving two A–Z lists would not be alphabetical, so a true sort has to
-  // happen across the merged set. localeCompare with numeric handling keeps
-  // "2.0" before "100" rather than sorting them as strings.
-  if (sort === 'alpha') {
-    return [...films, ...series].sort((a, b) =>
-      (a.title || '').localeCompare(b.title || '', undefined, { numeric: true, sensitivity: 'base' })
-    )
-  }
+  const hasMore = pages.some((p) => p.hasMore)
+  if (pages.length === 1) return { items: pages[0].items, hasMore }
+
+  const [films, series] = pages.map((p) => p.items)
+  // Interleaving two A–Z lists would not itself be alphabetical, so a true sort
+  // has to happen across the merged set.
+  if (sort === 'alpha') return { items: [...films, ...series].sort(byTitle), hasMore }
 
   const mixed = []
   for (let i = 0; i < Math.max(films.length, series.length); i++) {
     if (films[i]) mixed.push(films[i])
     if (series[i]) mixed.push(series[i])
   }
-  return mixed
+  return { items: mixed, hasMore }
+}
+
+// Appending an alphabetical page straight onto the last one is visibly wrong
+// when films and series are mixed: each type paginates independently, so page
+// two of films can start at "4" while page two of series is still in the M's.
+// Re-sorting the accumulated set keeps the list honest.
+export function mergeDiscovered(previous, incoming, sort) {
+  const seen = new Set(previous.map((m) => `${m.mediaType}:${m.id}`))
+  const merged = [...previous, ...incoming.filter((m) => !seen.has(`${m.mediaType}:${m.id}`))]
+  return sort === 'alpha' ? merged.sort(byTitle) : merged
 }
 
 // One request returns titles and people both. Titles feed the grid; people feed

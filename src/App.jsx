@@ -17,6 +17,7 @@ import {
   MEDIA_FILTERS,
   discoverByLanguage,
   matchLanguageQuery,
+  mergeDiscovered,
   searchMulti as searchPeopleFor,
   fetchCategory,
   fetchFeatured,
@@ -36,6 +37,9 @@ export default function App() {
   const [castPickerOpen, setCastPickerOpen] = useState(false)
   const [browse, setBrowse] = useState([])
   const [browsing, setBrowsing] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   // Close the panel once a session exists, whichever route got us there —
   // the password form, or coming back from Google.
@@ -155,16 +159,32 @@ export default function App() {
     setSort(queryLanguage ? 'alpha' : 'popular')
   }, [queryLanguage?.id, industry])
 
+  // Changing what is being browsed starts the paging over, or page 3 of Tamil
+  // would be requested for Hindi.
   useEffect(() => {
-    if (!browseMode) { setBrowse([]); return }
+    setPage(1)
+  }, [browseIndustry?.lang, media, sort])
+
+  useEffect(() => {
+    if (!browseMode) { setBrowse([]); setHasMore(false); return }
     let cancelled = false
-    setBrowsing(true)
-    discoverByLanguage(browseIndustry.lang, media, sort)
-      .then((rows) => { if (!cancelled) setBrowse(rows) })
-      .catch(() => { if (!cancelled) setBrowse([]) })
-      .finally(() => { if (!cancelled) setBrowsing(false) })
+    const first = page === 1
+    if (first) setBrowsing(true); else setLoadingMore(true)
+
+    discoverByLanguage(browseIndustry.lang, media, sort, page)
+      .then(({ items, hasMore }) => {
+        if (cancelled) return
+        setBrowse((prev) => (first ? items : mergeDiscovered(prev, items, sort)))
+        setHasMore(hasMore)
+      })
+      .catch(() => { if (!cancelled && first) setBrowse([]) })
+      .finally(() => {
+        if (cancelled) return
+        setBrowsing(false)
+        setLoadingMore(false)
+      })
     return () => { cancelled = true }
-  }, [browseMode, browseIndustry?.lang, media, sort])
+  }, [browseMode, browseIndustry?.lang, media, sort, page])
 
   // Computed from the unfiltered credits — these are career totals, not a count
   // of whatever survives the filters below.
@@ -227,6 +247,9 @@ export default function App() {
               sort={sort}
               onSort={setSort}
               typed={!!queryLanguage}
+              hasMore={hasMore}
+              loadingMore={loadingMore}
+              onLoadMore={() => setPage((p) => p + 1)}
             />
           </motion.main>
         ) : query.trim() || person ? (
@@ -361,7 +384,10 @@ function SignatureFooter() {
 }
 
 // Everything in a language, rather than rails of what happens to be popular.
-function BrowseGrid({ label, note, items, loading, sort, onSort, typed }) {
+function BrowseGrid({
+  label, note, items, loading, sort, onSort, typed,
+  hasMore, loadingMore, onLoadMore,
+}) {
   return (
     <section style={{ padding: '5.5rem clamp(1rem, 4vw, 3rem) 2rem', minHeight: '70vh' }}>
       <h2 style={{
@@ -419,6 +445,34 @@ function BrowseGrid({ label, note, items, loading, sort, onSort, typed }) {
           <MovieCard key={`${m.mediaType}-${m.id}`} movie={m} index={i} />
         ))}
       </div>
+
+      {/* Only shown while there is genuinely more, so it never fetches nothing
+          and looks broken. The count doubles as the end marker. */}
+      {items.length > 0 && (
+        <div style={{ textAlign: 'center', padding: '2rem 0 0.5rem' }}>
+          {hasMore ? (
+            <button
+              onClick={onLoadMore}
+              disabled={loadingMore}
+              style={{
+                padding: '11px 26px', borderRadius: 999,
+                border: '1px solid rgba(168,85,247,0.35)',
+                background: loadingMore ? 'transparent'
+                  : 'linear-gradient(100deg, var(--magenta), var(--violet))',
+                color: loadingMore ? 'var(--text-dim)' : '#fff',
+                fontWeight: 600, fontSize: 14,
+                cursor: loadingMore ? 'default' : 'pointer',
+              }}
+            >
+              {loadingMore ? 'Loading…' : 'Load more'}
+            </button>
+          ) : (
+            <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>
+              That’s all {items.length} of them.
+            </p>
+          )}
+        </div>
+      )}
     </section>
   )
 }
