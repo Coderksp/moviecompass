@@ -21,6 +21,7 @@ export default function SearchResults({
         ) : (
           <>Results for <span className="grad-text">“{query}”</span></>
         )}
+
       </motion.h2>
 
       {person && (
@@ -31,7 +32,8 @@ export default function SearchResults({
             color: 'var(--cyan)', fontSize: 13.5, marginBottom: 18,
           }}
         >
-          ← Back to results for “{query}”
+          {/* Arriving from a film's cast means there is no search to go back to. */}
+          {query.trim() ? `← Back to results for “${query}”` : '← Back to browsing'}
         </button>
       )}
 

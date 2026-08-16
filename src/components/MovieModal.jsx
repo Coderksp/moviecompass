@@ -10,12 +10,14 @@ import {
   WATCH_REGIONS,
 } from '../api/tmdb'
 import { useRegion, setRegion } from '../region'
+import { useOpenPerson } from '../movieModal'
 
 export default function MovieModal({ movie, onClose }) {
   const [details, setDetails] = useState(null)
   const [loading, setLoading] = useState(false)
   const [trailerKey, setTrailerKey] = useState(null)
   const [playing, setPlaying] = useState(false)
+  const openPerson = useOpenPerson()
 
   // Fetch full details whenever a new movie is opened.
   useEffect(() => {
@@ -63,16 +65,25 @@ export default function MovieModal({ movie, onClose }) {
   const runtime = lengthLabel(data)
   const link = externalUrl(data)
   const genres = data.genres || []
-  const cast = details?.credits?.cast?.slice(0, 6) || []
+  const cast = details?.credits?.cast?.slice(0, 12) || []
   const reviews = details?.reviews?.results || []
 
   return (
     <AnimatePresence>
       {movie && (
         <motion.div
+          // AnimatePresence needs a key to track presence. Without one, closing
+          // this mid-flight (opening an actor from the cast does exactly that)
+          // can orphan the node: exit runs, but the element is never removed.
+          key={movie.id}
+          className="modal-overlay"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          // display:none on completion, because opening an actor from the cast
+          // closes this mid-flight and the exit can leave an invisible node
+          // behind. Full-screen and fixed, it would swallow every click on the
+          // page underneath while showing nothing.
+          exit={{ opacity: 0, transitionEnd: { display: 'none' } }}
           onClick={onClose}
           style={{
             position: 'fixed', inset: 0, zIndex: 300,
@@ -223,18 +234,54 @@ export default function MovieModal({ movie, onClose }) {
               {/* Where to watch */}
               <WhereToWatch details={details} loading={loading} />
 
-              {/* Cast */}
+              {/* Cast — each face opens that actor's filmography, so finding a
+                  film is a way into everyone who was in it. */}
               {cast.length > 0 && (
                 <div style={{ marginBottom: 26 }}>
                   <h3 style={sectionTitle}>Cast</h3>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px' }}>
+                  <div style={{
+                    display: 'flex', gap: 14, overflowX: 'auto',
+                    paddingBottom: 6, scrollbarWidth: 'thin',
+                  }}>
                     {cast.map((c) => (
-                      <span key={c.id} style={{ fontSize: 14 }}>
-                        <span style={{ fontWeight: 600 }}>{c.name}</span>
+                      <button
+                        key={c.id}
+                        onClick={() => openPerson({
+                          id: c.id, name: c.name, profile_path: c.profile_path,
+                        })}
+                        title={`See everything ${c.name} is in`}
+                        style={{
+                          flex: '0 0 auto', width: 92, padding: 0, border: 'none',
+                          background: 'none', cursor: 'pointer', color: 'inherit',
+                          textAlign: 'center',
+                        }}
+                      >
+                        <span style={{
+                          display: 'block', width: 72, height: 72, margin: '0 auto 8px',
+                          borderRadius: '50%', overflow: 'hidden', background: 'var(--surface)',
+                          border: '1px solid rgba(168,85,247,0.3)',
+                        }}>
+                          {c.profile_path && (
+                            <img
+                              src={IMG(c.profile_path, 'w185')}
+                              alt={c.name}
+                              loading="lazy"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            />
+                          )}
+                        </span>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, display: 'block', lineHeight: 1.25 }}>
+                          {c.name}
+                        </span>
                         {c.character && (
-                          <span style={{ color: 'var(--text-dim)' }}> as {c.character}</span>
+                          <span style={{
+                            fontSize: 11, color: 'var(--text-dim)', display: 'block',
+                            marginTop: 2, lineHeight: 1.3,
+                          }}>
+                            {c.character}
+                          </span>
                         )}
-                      </span>
+                      </button>
                     ))}
                   </div>
                 </div>

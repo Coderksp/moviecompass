@@ -5,7 +5,7 @@ import Hero from './components/Hero'
 import Row from './components/Row'
 import SearchResults from './components/SearchResults'
 import MovieModal from './components/MovieModal'
-import { MovieModalContext } from './movieModal'
+import { MovieModalContext, OpenPersonContext } from './movieModal'
 import {
   CATEGORIES,
   MEDIA_FILTERS,
@@ -83,6 +83,7 @@ export default function App() {
   }, [])
 
   const openPerson = useCallback(async (p) => {
+    setSelected(null)      // opened from a cast member, so close the film modal
     setPerson(p)
     setCredits([])
     setRatings(null)
@@ -112,6 +113,7 @@ export default function App() {
 
   return (
     <MovieModalContext.Provider value={setSelected}>
+    <OpenPersonContext.Provider value={openPerson}>
     <div className="app">
       <div className="aurora"><span /><span /><span /></div>
       <Navbar onSearch={handleSearch} />
@@ -131,8 +133,14 @@ export default function App() {
 
       <MediaFilter value={media} onChange={setMedia} />
 
-      <AnimatePresence mode="wait">
-        {query.trim() ? (
+      {/* Deliberately not mode="wait": that mounts the incoming view only once
+          the outgoing one has finished exiting, and exits in this tree do not
+          reliably complete — opening an actor from a film's cast would leave the
+          filmography permanently unmounted. A crossfade needs no such gate. */}
+      <AnimatePresence>
+        {/* A person opened from a film's cast has no search query behind it, so
+            the filmography view has to stand on its own. */}
+        {query.trim() || person ? (
           <motion.main key="search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <SearchResults
               query={query}
@@ -180,6 +188,7 @@ export default function App() {
 
       <MovieModal movie={selected} onClose={() => setSelected(null)} />
     </div>
+    </OpenPersonContext.Provider>
     </MovieModalContext.Provider>
   )
 }

@@ -62,6 +62,15 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+/* Framer Motion does not always unmount the modal overlay when it is closed
+   mid-flight — opening an actor from a film's cast does exactly that. The node
+   is stranded at zero opacity, but it is fixed and full-screen, so it silently
+   swallows every click on the page beneath it. Invisible means non-interactive,
+   whatever the reason for it lingering. */
+.modal-overlay[style*="opacity: 0"] {
+  pointer-events: none;
+}
+
 /* The wordmark's tagline is the first thing to go when space runs out — the
    name and the mark still identify the app without it. */
 @media (max-width: 480px) {
