@@ -176,20 +176,92 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <footer style={{
-        textAlign: 'center', padding: '3rem 1rem 2rem',
-        color: 'var(--text-dim)', fontSize: 13, borderTop: '1px solid rgba(168,85,247,0.15)',
-      }}>
-        <p>Built with React, Vite & Framer Motion · Data by{' '}
-          <a href="https://www.themoviedb.org" target="_blank" rel="noreferrer"
-            style={{ color: 'var(--cyan)' }}>TMDB</a>
-        </p>
-      </footer>
+      <SignatureFooter />
 
       <MovieModal movie={selected} onClose={() => setSelected(null)} />
     </div>
     </OpenPersonContext.Provider>
     </MovieModalContext.Provider>
+  )
+}
+
+// The signature cycles through scripts. Transliterations are approximations —
+// the sound of the name written in each script, not a translation.
+const SIGNATURES = [
+  { text: 'Sugan Prasath', script: 'English' },
+  { text: 'சுகன் பிரசாத்', script: 'Tamil' },
+  { text: 'सुगन प्रसाद', script: 'Hindi' },
+  { text: 'సుగన్ ప్రసాద్', script: 'Telugu' },
+  { text: 'സുഗൻ പ്രസാദ്', script: 'Malayalam' },
+  { text: 'ಸುಗನ್ ಪ್ರಸಾದ್', script: 'Kannada' },
+  { text: 'スガン・プラサート', script: 'Japanese' },
+  { text: '苏甘·普拉萨特', script: 'Chinese' },
+  { text: 'سوغان براساث', script: 'Arabic' },
+  { text: 'Суган Прасат', script: 'Russian' },
+]
+
+function SignatureFooter() {
+  const [i, setI] = useState(0)
+
+  useEffect(() => {
+    const t = setInterval(() => setI((n) => (n + 1) % SIGNATURES.length), 2400)
+    return () => clearInterval(t)
+  }, [])
+
+  const reduced =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const current = SIGNATURES[i]
+
+  return (
+    <footer style={{
+      textAlign: 'center', padding: '3.5rem 1rem 2.5rem',
+      color: 'var(--text-dim)', fontSize: 13,
+      borderTop: '1px solid rgba(168,85,247,0.15)',
+    }}>
+      <p style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        gap: 8, flexWrap: 'wrap', margin: 0, minHeight: 34,
+      }}>
+        <span>Made by</span>
+
+        {/* A looping animation would be announced over and over, so the moving
+            part is hidden from assistive tech and a static name stands in. */}
+        <span style={{
+          position: 'absolute', width: 1, height: 1, padding: 0, margin: -1,
+          overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0,
+        }}>
+          Sugan Prasath
+        </span>
+
+        <span aria-hidden="true" style={{ display: 'inline-block' }}>
+          {/* Keyed on the index, so React remounts and the entrance animation
+              replays. No AnimatePresence, hence no exit to hang. */}
+          <motion.span
+            key={i}
+            initial={reduced ? { opacity: 0 } : { opacity: 0, y: 10, filter: 'blur(4px)' }}
+            animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, filter: 'blur(0px)' }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            className="grad-text"
+            style={{
+              display: 'inline-block', fontFamily: 'var(--font-display)',
+              fontWeight: 800, fontSize: 17, letterSpacing: '-0.01em',
+              lineHeight: 1.4,
+            }}
+          >
+            {current.text}
+          </motion.span>
+        </span>
+      </p>
+
+      <p aria-hidden="true" style={{
+        margin: '2px 0 0', fontSize: 11, letterSpacing: '0.14em',
+        textTransform: 'uppercase', color: 'var(--text-dim)', opacity: 0.6,
+      }}>
+        {current.script}
+      </p>
+
+    </footer>
   )
 }
 

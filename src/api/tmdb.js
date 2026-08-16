@@ -234,12 +234,20 @@ export async function fetchPersonCredits(personId) {
 // type as well — without it, tv/1399 would collide with movie/1399.
 const key = (id, mediaType) => `${mediaType || 'movie'}:${id}`
 
+// TMDB's videos endpoint filters by language and defaults to English, so asking
+// for nothing returns nothing for a Tamil film whose trailers are tagged "ta" —
+// Maanaadu has four on TMDB and the app was showing none. Every industry the
+// app can filter by is listed here; "null" catches untagged uploads.
+const VIDEO_LANGUAGES = 'en,hi,ta,te,ml,kn,ko,ja,null'
+
 // Returns a YouTube key for the best available trailer, or null.
 const trailerCache = new Map()
 export async function fetchTrailerKey(id, mediaType = 'movie') {
   const k = key(id, mediaType)
   if (trailerCache.has(k)) return trailerCache.get(k)
-  const data = await get(`/${mediaType}/${id}/videos`)
+  const data = await get(`/${mediaType}/${id}/videos`, {
+    include_video_language: VIDEO_LANGUAGES,
+  })
   const vids = data.results || []
   const pick =
     vids.find((v) => v.site === 'YouTube' && v.type === 'Trailer' && v.official) ||

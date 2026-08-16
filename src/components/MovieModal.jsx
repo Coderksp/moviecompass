@@ -318,6 +318,23 @@ export default function MovieModal({ movie, onClose }) {
               >
                 {link.label} ↗
               </a>
+
+              {/* TMDB's terms require attribution. It sits here, beside the data
+                  it actually powers, rather than as page furniture in the footer. */}
+              <p style={{
+                margin: '18px 0 0', fontSize: 11.5,
+                color: 'var(--text-dim)', opacity: 0.7,
+              }}>
+                Film data from{' '}
+                <a
+                  href="https://www.themoviedb.org"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: 'var(--cyan)', textDecoration: 'none' }}
+                >
+                  TMDB
+                </a>
+              </p>
             </div>
           </motion.div>
         </motion.div>
