@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   IMG,
   fetchMovieDetails,
+  fetchTrailerKey,
   letterboxdUrl,
   watchProviders,
   WATCH_REGIONS,
@@ -12,6 +13,8 @@ import { useRegion, setRegion } from '../region'
 export default function MovieModal({ movie, onClose }) {
   const [details, setDetails] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [trailerKey, setTrailerKey] = useState(null)
+  const [playing, setPlaying] = useState(false)
 
   // Fetch full details whenever a new movie is opened.
   useEffect(() => {
@@ -23,6 +26,19 @@ export default function MovieModal({ movie, onClose }) {
       .then((d) => { if (!cancelled) setDetails(d) })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [movie])
+
+  // Trailer is a separate, cached lookup — cards may already have warmed it.
+  // Reset playback so opening a new film never inherits the last one's trailer.
+  useEffect(() => {
+    if (!movie) return
+    let cancelled = false
+    setTrailerKey(null)
+    setPlaying(false)
+    fetchTrailerKey(movie.id)
+      .then((k) => { if (!cancelled) setTrailerKey(k) })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [movie])
 
@@ -82,24 +98,72 @@ export default function MovieModal({ movie, onClose }) {
               boxShadow: '0 30px 80px -20px rgba(0,0,0,0.8)',
             }}
           >
-            {/* Backdrop header */}
+            {/* Backdrop header — becomes the trailer player once started */}
             <div style={{ position: 'relative', aspectRatio: '16 / 9', background: 'var(--surface)' }}>
-              {data.backdrop_path && (
-                <img
-                  src={IMG(data.backdrop_path, 'w780')}
-                  alt=""
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              {playing && trailerKey ? (
+                <iframe
+                  title={`${data.title} trailer`}
+                  src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
+                  allow="autoplay; encrypted-media; fullscreen"
+                  allowFullScreen
+                  frameBorder="0"
+                  style={{ width: '100%', height: '100%', display: 'block', border: 0 }}
                 />
+              ) : (
+                <>
+                  {data.backdrop_path && (
+                    <img
+                      src={IMG(data.backdrop_path, 'w780')}
+                      alt=""
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                  )}
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'linear-gradient(to top, var(--bg-soft) 4%, rgba(20,11,34,0.2) 55%, transparent)',
+                  }} />
+
+                  {/* Only offered when a trailer actually exists for this film. */}
+                  {trailerKey && (
+                    <motion.button
+                      onClick={() => setPlaying(true)}
+                      aria-label={`Play ${data.title} trailer`}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      whileHover={{ scale: 1.06 }}
+                      whileTap={{ scale: 0.96 }}
+                      transition={{ duration: 0.25 }}
+                      style={{
+                        position: 'absolute', top: '50%', left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '12px 22px 12px 16px', borderRadius: 999,
+                        background: 'rgba(10,6,18,0.55)', backdropFilter: 'blur(10px)',
+                        border: '1px solid rgba(255,255,255,0.22)',
+                        color: 'var(--text)', fontWeight: 600, fontSize: 15,
+                        boxShadow: '0 10px 40px -8px rgba(0,0,0,0.7)',
+                      }}
+                    >
+                      <span style={{
+                        width: 30, height: 30, borderRadius: '50%', flex: 'none',
+                        background: 'linear-gradient(120deg, var(--magenta), var(--violet))',
+                        display: 'grid', placeItems: 'center',
+                      }}>
+                        <svg width="11" height="13" viewBox="0 0 11 13" aria-hidden="true">
+                          <polygon points="0,0 11,6.5 0,13" fill="#fff" />
+                        </svg>
+                      </span>
+                      Play trailer
+                    </motion.button>
+                  )}
+                </>
               )}
-              <div style={{
-                position: 'absolute', inset: 0,
-                background: 'linear-gradient(to top, var(--bg-soft) 4%, rgba(20,11,34,0.2) 55%, transparent)',
-              }} />
+
               <button
                 onClick={onClose}
                 aria-label="Close"
                 style={{
-                  position: 'absolute', top: 14, right: 14,
+                  position: 'absolute', top: 14, right: 14, zIndex: 2,
                   width: 38, height: 38, borderRadius: '50%',
                   border: '1px solid rgba(255,255,255,0.2)',
                   background: 'rgba(10,6,18,0.6)', backdropFilter: 'blur(8px)',
@@ -112,7 +176,13 @@ export default function MovieModal({ movie, onClose }) {
             </div>
 
             {/* Body */}
-            <div style={{ padding: 'clamp(1.25rem, 4vw, 2rem)', marginTop: '-3rem', position: 'relative' }}>
+            {/* The body normally rides up over the backdrop, but that overlap
+                would swallow YouTube's controls, so it collapses while playing. */}
+            <div style={{
+              padding: 'clamp(1.25rem, 4vw, 2rem)',
+              marginTop: playing && trailerKey ? 0 : '-3rem',
+              position: 'relative',
+            }}>
               <h2 style={{
                 fontFamily: 'var(--font-display)', fontWeight: 800,
                 fontSize: 'clamp(1.6rem, 4vw, 2.4rem)', lineHeight: 1.1, marginBottom: 12,
