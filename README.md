@@ -1,4 +1,4 @@
-# 🎬 Reelix — Movie Discovery App
+# 🎬 moviecompass — Movie Discovery App
 
 A colorful, animated movie discovery web app where **trailers play inline when you hover over a film**. Browse trending picks, search 600,000+ titles, and watch previews without ever leaving the page.
 
