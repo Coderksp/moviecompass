@@ -1,20 +1,35 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { signIn } from '../auth'
+import { signIn, register } from '../auth'
 
-// The sign-in gate. There is no backend, so nothing here verifies anything —
-// it is a demo session, and the page says so rather than implying otherwise.
+// The sign-in gate. Accounts are real: passwords are hashed server-side and the
+// session is an httpOnly cookie, so nothing sensitive is held in the page.
 export default function SignIn() {
+  const [mode, setMode] = useState('signin')       // 'signin' | 'register'
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  const submit = (e) => {
+  const creating = mode === 'register'
+
+  const submit = async (e) => {
     e.preventDefault()
     if (!name.trim()) return setError('Enter a username to continue.')
     if (!password) return setError('Enter a password to continue.')
-    // The password is deliberately not passed on or stored anywhere.
-    signIn(name, 'password')
+
+    setBusy(true)
+    setError('')
+    try {
+      // The password goes straight to the server and is never stored here.
+      await (creating ? register(name, password) : signIn(name, password))
+    } catch (err) {
+      // The server's message is the useful one — "that username is taken",
+      // "invalid username or password", or a lockout notice.
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -60,7 +75,9 @@ export default function SignIn() {
         </div>
 
         <p style={{ color: 'var(--text-dim)', fontSize: 13.5, margin: '0 0 22px', lineHeight: 1.55 }}>
-          Demo sign-in — no account needed, and nothing is sent anywhere.
+          {creating
+            ? 'Pick a username and a password of at least 8 characters.'
+            : 'Sign in to keep a watchlist, favourites and your own ratings.'}
         </p>
 
         <form onSubmit={submit} noValidate>
@@ -76,7 +93,9 @@ export default function SignIn() {
             type="password"
             value={password}
             onChange={(v) => { setPassword(v); setError('') }}
-            autoComplete="current-password"
+            // Tells a password manager to offer a generated one when creating
+            // an account, and the saved one when returning.
+            autoComplete={creating ? 'new-password' : 'current-password'}
             placeholder="••••••••"
           />
 
@@ -88,15 +107,31 @@ export default function SignIn() {
 
           <button
             type="submit"
+            disabled={busy}
             style={{
               width: '100%', padding: '12px 18px', borderRadius: 999, border: 'none',
               background: 'linear-gradient(100deg, var(--magenta), var(--violet))',
-              color: '#fff', fontWeight: 700, fontSize: 14.5, cursor: 'pointer',
+              color: '#fff', fontWeight: 700, fontSize: 14.5,
+              cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.65 : 1,
             }}
           >
-            Sign in
+            {busy ? 'One moment…' : creating ? 'Create account' : 'Sign in'}
           </button>
         </form>
+
+        <p style={{ textAlign: 'center', margin: '14px 0 0', fontSize: 13, color: 'var(--text-dim)' }}>
+          {creating ? 'Already have an account?' : 'New here?'}{' '}
+          <button
+            type="button"
+            onClick={() => { setMode(creating ? 'signin' : 'register'); setError('') }}
+            style={{
+              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              color: 'var(--cyan)', fontSize: 13, fontWeight: 600,
+            }}
+          >
+            {creating ? 'Sign in' : 'Create an account'}
+          </button>
+        </p>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0' }}>
           <span style={{ height: 1, flex: 1, background: 'rgba(168,85,247,0.2)' }} />
@@ -107,17 +142,26 @@ export default function SignIn() {
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <SocialButton label="Google" onClick={() => signIn('Google user', 'google')}>
+          {/* Not wired yet. Signing someone in under a made-up name would be
+              worse than saying so: the account would be real, and shared by
+              everyone who pressed the button. */}
+          <SocialButton
+            label="Google"
+            onClick={() => setError('Google sign-in is not connected yet — use a username for now.')}
+          >
             <GoogleMark />
           </SocialButton>
-          <SocialButton label="Facebook" onClick={() => signIn('Facebook user', 'facebook')}>
+          <SocialButton
+            label="Facebook"
+            onClick={() => setError('Facebook sign-in is not connected yet — use a username for now.')}
+          >
             <FacebookMark />
           </SocialButton>
         </div>
 
         <p style={{ color: 'var(--text-dim)', fontSize: 11.5, margin: '20px 0 0', lineHeight: 1.6, opacity: 0.75 }}>
-          These are placeholders. Real Google or Facebook sign-in needs a registered
-          app and a server to hold the secret.
+          Passwords are hashed on the server and the session is an httpOnly cookie,
+          so nothing sensitive is kept in this page.
         </p>
       </motion.div>
     </div>

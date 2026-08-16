@@ -7,7 +7,7 @@ import SearchResults from './components/SearchResults'
 import MovieModal from './components/MovieModal'
 import { MovieModalContext, OpenPersonContext } from './movieModal'
 import SignIn from './components/SignIn'
-import { useUser } from './auth'
+import { useSession } from './auth'
 import {
   CATEGORIES,
   MEDIA_FILTERS,
@@ -23,7 +23,7 @@ import {
 } from './api/tmdb'
 
 export default function App() {
-  const user = useUser()
+  const session = useSession()
   const [featured, setFeatured] = useState(null)
   const [rows, setRows] = useState({})
   const [query, setQuery] = useState('')
@@ -115,12 +115,14 @@ export default function App() {
   const stats = person && credits.length ? personStats(credits, ratings) : null
 
   // The aurora backdrop stays behind the gate so it doesn't appear from nowhere
-  // once you're through.
-  if (!user) {
+  // once you're through. While the session is still being checked, show the
+  // backdrop alone — flashing the sign-in page and then replacing it reads as
+  // being signed out, which is worse than a moment of nothing.
+  if (session.status !== 'in') {
     return (
       <div className="app">
         <div className="aurora"><span /><span /><span /></div>
-        <SignIn />
+        {session.status === 'out' && <SignIn />}
       </div>
     )
   }
