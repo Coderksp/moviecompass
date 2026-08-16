@@ -12,8 +12,11 @@ import {
   fetchCategory,
   fetchFeatured,
   fetchPersonCredits,
+  fetchExternalRatings,
   industryLang,
   matchesIndustry,
+  personStats,
+  ratingShortlist,
   searchMulti,
 } from './api/tmdb'
 
@@ -30,6 +33,7 @@ export default function App() {
   const [industry, setIndustry] = useState('all')
   const [person, setPerson] = useState(null)      // the actor being browsed
   const [credits, setCredits] = useState([])
+  const [ratings, setRatings] = useState(null)    // external scores, when available
 
   // Rails for every type load once; the filter only decides what is shown, so
   // switching between All/Movies/Series never refetches.
@@ -81,8 +85,15 @@ export default function App() {
   const openPerson = useCallback(async (p) => {
     setPerson(p)
     setCredits([])
+    setRatings(null)
     try {
-      setCredits(await fetchPersonCredits(p.id))
+      const items = await fetchPersonCredits(p.id)
+      setCredits(items)
+      // Fires only for the shortlist, and resolves to null until Letterboxd
+      // credentials exist — so the header renders immediately either way.
+      fetchExternalRatings(ratingShortlist(items))
+        .then((r) => { if (r) setRatings(r) })
+        .catch(() => {})
     } catch (e) {
       setError(e.message)
     }
@@ -94,6 +105,10 @@ export default function App() {
   const visibleResults = (person ? credits : results).filter(
     (r) => (media === 'all' || r.mediaType === media) && matchesIndustry(r, lang)
   )
+
+  // Computed from the unfiltered credits — these are career totals, not a count
+  // of whatever survives the filters below.
+  const stats = person && credits.length ? personStats(credits, ratings) : null
 
   return (
     <MovieModalContext.Provider value={setSelected}>
@@ -124,6 +139,7 @@ export default function App() {
               results={visibleResults}
               people={people}
               person={person}
+              stats={stats}
               onPerson={openPerson}
               onClearPerson={() => setPerson(null)}
               industry={industry}

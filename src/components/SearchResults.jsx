@@ -3,7 +3,7 @@ import MovieCard from './MovieCard'
 import { IMG, INDUSTRIES } from '../api/tmdb'
 
 export default function SearchResults({
-  query, results, people = [], person, onPerson, onClearPerson,
+  query, results, people = [], person, stats, onPerson, onClearPerson,
   industry = 'all', onIndustry,
 }) {
   return (
@@ -34,6 +34,8 @@ export default function SearchResults({
           ← Back to results for “{query}”
         </button>
       )}
+
+      {person && stats && <ActorStats person={person} stats={stats} />}
 
       {/* Industry is the original language of a title, so this narrows any set
           on screen — search results or an actor's filmography alike. */}
@@ -135,4 +137,97 @@ export default function SearchResults({
       )}
     </section>
   )
+}
+
+// Career totals plus the actor's best-rated film. "Best" is a vote-weighted
+// score, not the raw rating — see personStats for why.
+function ActorStats({ person, stats }) {
+  const { movies, series, best, rating, votes, source } = stats
+  const year = best?.release_date ? best.release_date.slice(0, 4) : ''
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      style={{
+        background: 'var(--bg-soft)', border: '1px solid rgba(168,85,247,0.18)',
+        borderRadius: 16, padding: 20, marginBottom: 22,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        {person.profile_path && (
+          <img
+            src={IMG(person.profile_path, 'w185')}
+            alt=""
+            width={64}
+            height={64}
+            style={{
+              borderRadius: '50%', objectFit: 'cover', flex: 'none',
+              border: '1px solid rgba(168,85,247,0.35)',
+            }}
+          />
+        )}
+        <div style={{
+          fontFamily: 'var(--font-display)', fontWeight: 800,
+          fontSize: 24, letterSpacing: '-0.03em', lineHeight: 1.05,
+        }}>
+          {person.name}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 34, flexWrap: 'wrap', marginTop: 16 }}>
+        <Stat value={movies} label="Films" grad />
+        <Stat value={series} label="Series" grad />
+        {best && (
+          <>
+            <Stat
+              value={
+                <>
+                  {rating.toFixed(1)}
+                  <span style={{ fontSize: 15, color: 'var(--text-dim)', fontWeight: 600 }}>
+                    /10
+                  </span>
+                </>
+              }
+              // Naming the source and the vote count is what makes the ranking
+              // legible — it shows why this film won rather than asserting it.
+              label={`${source} rating`}
+              color="var(--amber)"
+            />
+            <div style={{ flex: 1, minWidth: 190 }}>
+              <div style={{ fontWeight: 650, fontSize: 15, marginTop: 2 }}>{best.title}</div>
+              <div style={statLabel}>
+                Fan favourite{year ? ` · ${year}` : ''}
+                {votes ? ` · ${votes.toLocaleString()} votes` : ''}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
+function Stat({ value, label, grad, color }) {
+  return (
+    <div>
+      <div
+        className={grad ? 'grad-text' : undefined}
+        style={{
+          fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 30,
+          letterSpacing: '-0.03em', lineHeight: 1, color,
+        }}
+      >
+        {value}
+      </div>
+      <div style={statLabel}>{label}</div>
+    </div>
+  )
+}
+
+const statLabel = {
+  fontFamily: 'var(--font-display)', fontSize: 10.5, fontWeight: 600,
+  letterSpacing: '0.14em', textTransform: 'uppercase',
+  color: 'var(--text-dim)', marginTop: 4,
 }

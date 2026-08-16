@@ -121,6 +121,93 @@ export async function searchMulti(query) {
   return { titles, people }
 }
 
+// A film's standing in public opinion, not its raw average: the score is scaled
+// by how many people actually weighed in, so a title the audience turned out for
+// beats one with a marginally higher average from a handful of votes. The log
+// stops a blockbuster from simply out-voting a better-loved film.
+const publicOpinion = (m) =>
+  (m.vote_average || 0) * Math.log10(1 + (m.vote_count || 0))
+
+// An actor's defining film should come from the industry they actually work in.
+// Without this, Ajith's top film is Aśoka — a Hindi picture he appeared in —
+// purely because Bollywood's audience is larger than Kollywood's on TMDB.
+function homeLanguageFilms(rated) {
+  const tally = {}
+  rated.forEach((m) => {
+    tally[m.original_language] = (tally[m.original_language] || 0) + 1
+  })
+  const home = Object.entries(tally).sort((a, b) => b[1] - a[1])[0]?.[0]
+  const pool = rated.filter((m) => m.original_language === home)
+  return pool.length ? pool : rated
+}
+
+// Career totals, so the header stays put while the grid below is filtered.
+// `ratings` is an optional map of tmdb id -> {score, votes} from IMDb. When
+// present it decides the ordering, since it reflects far more opinion than
+// TMDB's own counts do for regional cinema.
+export function personStats(items, ratings = null) {
+  const movies = items.filter((i) => i.mediaType === 'movie')
+  const series = items.filter((i) => i.mediaType === 'tv')
+  const rated = movies.filter((m) => (m.vote_count || 0) > 0)
+  if (!rated.length) return { movies: movies.length, series: series.length, best: null }
+
+  const pool = homeLanguageFilms(rated)
+  const withImdb = ratings ? pool.filter((m) => ratings[m.id]) : []
+
+  const best = withImdb.length
+    ? withImdb.reduce((a, b) =>
+        ratings[b.id].score * Math.log10(1 + ratings[b.id].votes) >
+        ratings[a.id].score * Math.log10(1 + ratings[a.id].votes) ? b : a)
+    : pool.reduce((a, b) => (publicOpinion(b) > publicOpinion(a) ? b : a))
+
+  const imdb = withImdb.length ? ratings[best.id] : null
+  return {
+    movies: movies.length,
+    series: series.length,
+    best,
+    rating: imdb ? imdb.score : best.vote_average,
+    votes: imdb ? imdb.votes : best.vote_count,
+    source: imdb ? 'IMDb' : 'TMDB',
+  }
+}
+
+// The shortlist sent for IMDb lookup. Rating a 165-film career one request at a
+// time would burn the daily quota on a single actor, so the TMDB score narrows
+// it first and only the plausible winners are looked up.
+export function ratingShortlist(items, n = 8) {
+  const rated = items.filter((i) => i.mediaType === 'movie' && (i.vote_count || 0) > 0)
+  if (!rated.length) return []
+  return homeLanguageFilms(rated)
+    .sort((a, b) => publicOpinion(b) - publicOpinion(a))
+    .slice(0, n)
+    .map((i) => i.id)
+}
+
+// Resolves to null when no OMDB_API_KEY is configured, which is the normal
+// state until a key is added — the caller then keeps the TMDB-based score.
+const ratingCache = new Map()
+export async function fetchExternalRatings(ids) {
+  if (!ids.length) return null
+  const k = ids.join(',')
+  if (ratingCache.has(k)) return ratingCache.get(k)
+  const p = (async () => {
+    try {
+      const url = new URL(`${ORIGIN}/api/rating`, window.location.origin)
+      url.searchParams.set('ids', k)
+      const res = await fetch(url)
+      if (!res.ok) return null
+      const body = await res.json()
+      return body.available && Object.keys(body.ratings || {}).length
+        ? body.ratings
+        : null
+    } catch {
+      return null
+    }
+  })()
+  ratingCache.set(k, p)
+  return p
+}
+
 // Everything an actor appears in, films and series together. TMDB lists a title
 // once per credited role, so the same show can appear several times — deduped
 // by type and id, then ordered by popularity so the recognisable work leads.
