@@ -6,7 +6,7 @@ import {
   fetchWatchProviders,
   providersForRegion,
 } from '../api/tmdb'
-import { useOpenMovie } from '../movieModal'
+import { useOpenMovie, useRequestSignIn } from '../movieModal'
 import { useRegion } from '../region'
 import { useEntry, update } from '../library'
 import { useUser } from '../auth'
@@ -31,12 +31,17 @@ export default function MovieCard({ movie, index }) {
   const rating = movie.vote_average ? movie.vote_average.toFixed(1) : null
   const isSeries = movie.mediaType === 'tv'
   const user = useUser()
+  const requestSignIn = useRequestSignIn()
   const entry = useEntry(movie.id, movie.mediaType)
 
   // stopPropagation everywhere: these sit inside a card that opens the modal on
   // click, and saving something should not also open it.
+  //
+  // Signed out, the control is shown and offers an account rather than being
+  // hidden. Hiding it means never discovering the feature exists.
   const toggle = (field) => (e) => {
     e.stopPropagation()
+    if (!user) return requestSignIn()
     update(movie, { [field]: !entry?.[field] }).catch(() => {})
   }
 
@@ -100,10 +105,10 @@ export default function MovieCard({ movie, index }) {
         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
       />
 
-      {/* Save and favourite. Only shown to a signed-in visitor: a control that
-          can only fail is worse than no control. Always visible rather than
-          hover-only, since a phone has no hover. */}
-      {user && (
+      {/* Save and favourite. Shown to everyone — signed out, they offer an
+          account instead of acting. Always visible rather than hover-only,
+          since a phone has no hover. */}
+      {(
         <motion.div
           animate={{ opacity: showFrame ? 0 : 1 }}
           transition={{ duration: 0.3 }}
@@ -115,14 +120,16 @@ export default function MovieCard({ movie, index }) {
           <IconToggle
             on={!!entry?.watchlist}
             onClick={toggle('watchlist')}
-            label={entry?.watchlist ? 'Remove from watchlist' : 'Add to watchlist'}
+            label={!user ? 'Sign in to use a watchlist'
+              : entry?.watchlist ? 'Remove from watchlist' : 'Add to watchlist'}
           >
             <path d="M5 3h14v18l-7-5-7 5z" />
           </IconToggle>
           <IconToggle
             on={!!entry?.favourite}
             onClick={toggle('favourite')}
-            label={entry?.favourite ? 'Remove from favourites' : 'Add to favourites'}
+            label={!user ? 'Sign in to save favourites'
+              : entry?.favourite ? 'Remove from favourites' : 'Add to favourites'}
           >
             <path d="M12 21s-8-4.6-8-10a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 11c0 5.4-8 10-8 10z" />
           </IconToggle>

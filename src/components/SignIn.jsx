@@ -4,7 +4,7 @@ import { signIn, register } from '../auth'
 
 // The sign-in gate. Accounts are real: passwords are hashed server-side and the
 // session is an httpOnly cookie, so nothing sensitive is held in the page.
-export default function SignIn() {
+export default function SignIn({ onClose }) {
   const [mode, setMode] = useState('signin')       // 'signin' | 'register'
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
@@ -47,11 +47,33 @@ export default function SignIn() {
     }
   }
 
+  // Escape closes it, the same as the film modal — a panel you opened by
+  // choice should never feel like something you are stuck in.
+  useEffect(() => {
+    if (!onClose) return
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [onClose])
+
   return (
-    <div style={{
-      minHeight: '100vh', display: 'grid', placeItems: 'center',
-      padding: 'clamp(1rem, 5vw, 3rem)', position: 'relative', zIndex: 2,
-    }}>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 400,
+        display: 'grid', placeItems: 'center',
+        padding: 'clamp(1rem, 5vw, 3rem)',
+        background: 'rgba(5,3,10,0.72)', backdropFilter: 'blur(8px)',
+        overflowY: 'auto',
+      }}
+    >
+      {/* The panel swallows clicks so only the backdrop dismisses. */}
+      <div onClick={(e) => e.stopPropagation()} style={{ display: 'contents' }}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -87,6 +109,20 @@ export default function SignIn() {
           }}>
             Movie Compass
           </span>
+          {onClose && (
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                marginLeft: 'auto', width: 30, height: 30, borderRadius: '50%',
+                border: '1px solid rgba(255,255,255,0.18)', cursor: 'pointer',
+                background: 'rgba(10,6,18,0.6)', color: 'var(--text)',
+                fontSize: 17, lineHeight: 1, display: 'grid', placeItems: 'center',
+              }}
+            >
+              ×
+            </button>
+          )}
         </div>
 
         <p style={{ color: 'var(--text-dim)', fontSize: 13.5, margin: '0 0 22px', lineHeight: 1.55 }}>
@@ -177,7 +213,23 @@ export default function SignIn() {
           Passwords are hashed on the server and the session is an httpOnly cookie,
           so nothing sensitive is kept in this page.
         </p>
+
+        {/* An explicit way out. Browsing needs no account, and the panel should
+            say so rather than leaving the close button to imply it. */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            style={{
+              display: 'block', width: '100%', marginTop: 14, padding: '9px',
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-dim)', fontSize: 13,
+            }}
+          >
+            Keep browsing without an account
+          </button>
+        )}
       </motion.div>
+      </div>
     </div>
   )
 }

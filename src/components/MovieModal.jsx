@@ -10,7 +10,7 @@ import {
   WATCH_REGIONS,
 } from '../api/tmdb'
 import { useRegion, setRegion } from '../region'
-import { useOpenPerson } from '../movieModal'
+import { useOpenPerson, useRequestSignIn } from '../movieModal'
 import { useEntry, update } from '../library'
 import { useUser } from '../auth'
 
@@ -349,15 +349,17 @@ export default function MovieModal({ movie, onClose }) {
   )
 }
 
-// Watchlist, favourite and your own score. Hidden when signed out rather than
-// shown disabled: a row of dead controls invites clicks that go nowhere.
+// Watchlist, favourite and your own score. Shown signed out too, offering an
+// account on the first press — hiding it means the feature is never discovered.
 function YourLibrary({ movie }) {
   const user = useUser()
+  const requestSignIn = useRequestSignIn()
   const entry = useEntry(movie.id, movie.mediaType)
   const [busy, setBusy] = useState(false)
-  if (!user || !movie.id) return null
+  if (!movie.id) return null
 
   const send = async (patch) => {
+    if (!user) return requestSignIn()
     setBusy(true)
     try { await update(movie, patch) } catch (_) { /* the store rolls back */ }
     finally { setBusy(false) }

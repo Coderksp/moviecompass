@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { IMG, searchMulti } from '../api/tmdb'
 import { useUser, signOut } from '../auth'
+import { useRequestSignIn } from '../movieModal'
 
 export default function Navbar({ onSearch }) {
   const [scrolled, setScrolled] = useState(false)
@@ -265,18 +266,38 @@ export default function Navbar({ onSearch }) {
   )
 }
 
-// The signed-in initial, doubling as the way back out. A single circle costs
-// almost no width beside the search box on a phone.
+// Signed in: the initial, doubling as the way back out. Signed out: a way in.
+// A single circle costs almost no width beside the search box on a phone.
 function SignOutChip() {
   const user = useUser()
-  if (!user) return null
-  const initial = (user.name || '?').trim().charAt(0).toUpperCase()
+  const requestSignIn = useRequestSignIn()
+
+  if (!user) {
+    return (
+      <button
+        onClick={requestSignIn}
+        style={{
+          marginLeft: 10, flex: 'none', padding: '7px 15px', borderRadius: 999,
+          cursor: 'pointer', whiteSpace: 'nowrap',
+          border: '1px solid rgba(168,85,247,0.4)',
+          background: 'rgba(26,16,41,0.7)', color: 'var(--text)',
+          fontSize: 13, fontWeight: 600,
+        }}
+      >
+        Sign in
+      </button>
+    )
+  }
+
+  const initial = (user.username || user.name || '?').trim().charAt(0).toUpperCase()
 
   return (
     <button
       onClick={signOut}
-      title={`Signed in as ${user.name} — sign out`}
-      aria-label={`Signed in as ${user.name}. Sign out.`}
+      // The API returns `username`; `name` was the demo store's field and would
+      // render "Signed in as undefined" here.
+      title={`Signed in as ${user.username} — sign out`}
+      aria-label={`Signed in as ${user.username}. Sign out.`}
       style={{
         marginLeft: 10, flex: 'none', width: 34, height: 34, borderRadius: '50%',
         display: 'grid', placeItems: 'center', cursor: 'pointer',

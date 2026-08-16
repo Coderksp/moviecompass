@@ -9,3 +9,9 @@ export const useOpenMovie = () => useContext(MovieModalContext)
 // to the filmography view without the modal knowing how that view is wired.
 export const OpenPersonContext = createContext(() => {})
 export const useOpenPerson = () => useContext(OpenPersonContext)
+
+// Reaching for a signed-in feature while signed out asks for an account. A card
+// deep in a rail should be able to raise that without knowing the sign-in panel
+// exists, let alone how to open it.
+export const RequestSignInContext = createContext(() => {})
+export const useRequestSignIn = () => useContext(RequestSignInContext)

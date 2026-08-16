@@ -5,7 +5,7 @@ import Hero from './components/Hero'
 import Row from './components/Row'
 import SearchResults from './components/SearchResults'
 import MovieModal from './components/MovieModal'
-import { MovieModalContext, OpenPersonContext } from './movieModal'
+import { MovieModalContext, OpenPersonContext, RequestSignInContext } from './movieModal'
 import SignIn from './components/SignIn'
 import { useSession } from './auth'
 import { useLibrary, loadLibrary, clearLibrary } from './library'
@@ -27,6 +27,13 @@ import {
 export default function App() {
   const session = useSession()
   const library = useLibrary()
+  const [signInOpen, setSignInOpen] = useState(false)
+
+  // Close the panel once a session exists, whichever route got us there —
+  // the password form, or coming back from Google.
+  useEffect(() => {
+    if (session.status === 'in') setSignInOpen(false)
+  }, [session.status])
 
   // The library follows the session: loaded when you sign in, dropped when you
   // leave, so one person's saved titles never linger for the next.
@@ -124,22 +131,10 @@ export default function App() {
   // of whatever survives the filters below.
   const stats = person && credits.length ? personStats(credits, ratings) : null
 
-  // The aurora backdrop stays behind the gate so it doesn't appear from nowhere
-  // once you're through. While the session is still being checked, show the
-  // backdrop alone — flashing the sign-in page and then replacing it reads as
-  // being signed out, which is worse than a moment of nothing.
-  if (session.status !== 'in') {
-    return (
-      <div className="app">
-        <div className="aurora"><span /><span /><span /></div>
-        {session.status === 'out' && <SignIn />}
-      </div>
-    )
-  }
-
   return (
     <MovieModalContext.Provider value={setSelected}>
     <OpenPersonContext.Provider value={openPerson}>
+    <RequestSignInContext.Provider value={() => setSignInOpen(true)}>
     <div className="app">
       <div className="aurora"><span /><span /><span /></div>
       <Navbar onSearch={handleSearch} />
@@ -208,7 +203,10 @@ export default function App() {
       <SignatureFooter />
 
       <MovieModal movie={selected} onClose={() => setSelected(null)} />
+
+      {signInOpen && <SignIn onClose={() => setSignInOpen(false)} />}
     </div>
+    </RequestSignInContext.Provider>
     </OpenPersonContext.Provider>
     </MovieModalContext.Provider>
   )
