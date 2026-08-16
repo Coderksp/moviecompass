@@ -11,6 +11,8 @@ import {
 } from '../api/tmdb'
 import { useRegion, setRegion } from '../region'
 import { useOpenPerson } from '../movieModal'
+import { useEntry, update } from '../library'
+import { useUser } from '../auth'
 
 export default function MovieModal({ movie, onClose }) {
   const [details, setDetails] = useState(null)
@@ -231,6 +233,10 @@ export default function MovieModal({ movie, onClose }) {
                 </p>
               )}
 
+              {/* Your own shelf for this title, above the public data — it is
+                  the part only you can change. */}
+              <YourLibrary movie={data} />
+
               {/* Where to watch */}
               <WhereToWatch details={details} loading={loading} />
 
@@ -340,6 +346,93 @@ export default function MovieModal({ movie, onClose }) {
         </motion.div>
       )}
     </AnimatePresence>
+  )
+}
+
+// Watchlist, favourite and your own score. Hidden when signed out rather than
+// shown disabled: a row of dead controls invites clicks that go nowhere.
+function YourLibrary({ movie }) {
+  const user = useUser()
+  const entry = useEntry(movie.id, movie.mediaType)
+  const [busy, setBusy] = useState(false)
+  if (!user || !movie.id) return null
+
+  const send = async (patch) => {
+    setBusy(true)
+    try { await update(movie, patch) } catch (_) { /* the store rolls back */ }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ marginBottom: 26 }}>
+      <h3 style={sectionTitle}>Your library</h3>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        <Pill
+          on={!!entry?.watchlist}
+          disabled={busy}
+          onClick={() => send({ watchlist: !entry?.watchlist })}
+        >
+          {entry?.watchlist ? '✓ On your watchlist' : '+ Add to watchlist'}
+        </Pill>
+        <Pill
+          on={!!entry?.favourite}
+          disabled={busy}
+          onClick={() => send({ favourite: !entry?.favourite })}
+        >
+          {entry?.favourite ? '♥ Favourite' : '♡ Favourite'}
+        </Pill>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12.5, color: 'var(--text-dim)' }}>Your rating</span>
+        <div style={{ display: 'flex', gap: 3 }}>
+          {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => {
+            const active = (entry?.rating || 0) >= n
+            return (
+              <button
+                key={n}
+                disabled={busy}
+                onClick={() => send({ rating: entry?.rating === n ? null : n })}
+                title={entry?.rating === n ? `Clear your ${n}/10` : `Rate ${n} out of 10`}
+                aria-label={`Rate ${n} out of 10`}
+                style={{
+                  width: 20, height: 26, border: 'none', background: 'none',
+                  cursor: busy ? 'default' : 'pointer', padding: 0,
+                  color: active ? 'var(--amber)' : 'var(--text-dim)',
+                  opacity: active ? 1 : 0.4, fontSize: 17, lineHeight: 1,
+                }}
+              >
+                ★
+              </button>
+            )
+          })}
+        </div>
+        {entry?.rating && (
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14 }}>
+            {entry.rating}/10
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Pill({ on, children, ...rest }) {
+  return (
+    <button
+      {...rest}
+      aria-pressed={on}
+      style={{
+        padding: '7px 15px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+        cursor: rest.disabled ? 'default' : 'pointer',
+        color: on ? '#fff' : 'var(--text-dim)',
+        background: on ? 'linear-gradient(100deg, var(--magenta), var(--violet))' : 'transparent',
+        border: on ? '1px solid transparent' : '1px solid rgba(168,85,247,0.3)',
+      }}
+    >
+      {children}
+    </button>
   )
 }
 

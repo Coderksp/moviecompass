@@ -8,6 +8,8 @@ import MovieModal from './components/MovieModal'
 import { MovieModalContext, OpenPersonContext } from './movieModal'
 import SignIn from './components/SignIn'
 import { useSession } from './auth'
+import { useLibrary, loadLibrary, clearLibrary } from './library'
+import { fetchMovieDetails } from './api/tmdb'
 import {
   CATEGORIES,
   MEDIA_FILTERS,
@@ -24,6 +26,14 @@ import {
 
 export default function App() {
   const session = useSession()
+  const library = useLibrary()
+
+  // The library follows the session: loaded when you sign in, dropped when you
+  // leave, so one person's saved titles never linger for the next.
+  useEffect(() => {
+    if (session.status === 'in') loadLibrary()
+    else if (session.status === 'out') clearLibrary()
+  }, [session.status, session.user?.id])
   const [featured, setFeatured] = useState(null)
   const [rows, setRows] = useState({})
   const [query, setQuery] = useState('')
@@ -174,6 +184,9 @@ export default function App() {
           <motion.main key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <Hero movie={featured} />
             <div style={{ marginTop: '-2rem', position: 'relative', zIndex: 2 }}>
+              {/* Your own rails first — what you saved outranks what is trending. */}
+              <LibraryRow title="Your watchlist" field="watchlist" library={library} />
+              <LibraryRow title="Your favourites" field="favourite" library={library} />
               {visibleCategories.map((cat) => (
                 <Row
                   key={cat.id}
@@ -279,6 +292,37 @@ function SignatureFooter() {
 
     </footer>
   )
+}
+
+// A rail built from saved ids. Only ids are stored, so each title is hydrated
+// through the cached details endpoint — a poster that changes upstream is never
+// frozen here, and there is no second copy of the catalogue to keep in step.
+function LibraryRow({ title, field, library }) {
+  const [items, setItems] = useState([])
+
+  const ids = [...library.values()]
+    .filter((e) => e[field])
+    .map((e) => `${e.mediaType}:${e.tmdbId}`)
+    .join(',')
+
+  useEffect(() => {
+    if (!ids) { setItems([]); return }
+    let cancelled = false
+    const wanted = ids.split(',').map((k) => {
+      const [mediaType, id] = k.split(':')
+      return { id: Number(id), mediaType }
+    })
+    Promise.all(
+      wanted.map((w) => fetchMovieDetails(w.id, w.mediaType).catch(() => null))
+    ).then((rows) => {
+      // Order is preserved from the store, which is newest-saved first.
+      if (!cancelled) setItems(rows.filter(Boolean))
+    })
+    return () => { cancelled = true }
+  }, [ids])
+
+  if (!items.length) return null
+  return <Row title={title} movies={items} anchorId={`lib-${field}`} />
 }
 
 // Sits under the navbar and drives both the rails and the search results.

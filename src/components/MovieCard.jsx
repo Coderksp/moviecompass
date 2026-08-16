@@ -8,6 +8,8 @@ import {
 } from '../api/tmdb'
 import { useOpenMovie } from '../movieModal'
 import { useRegion } from '../region'
+import { useEntry, update } from '../library'
+import { useUser } from '../auth'
 
 export default function MovieCard({ movie, index }) {
   const [hovered, setHovered] = useState(false)
@@ -28,6 +30,15 @@ export default function MovieCard({ movie, index }) {
   const year = movie.release_date ? movie.release_date.slice(0, 4) : ''
   const rating = movie.vote_average ? movie.vote_average.toFixed(1) : null
   const isSeries = movie.mediaType === 'tv'
+  const user = useUser()
+  const entry = useEntry(movie.id, movie.mediaType)
+
+  // stopPropagation everywhere: these sit inside a card that opens the modal on
+  // click, and saving something should not also open it.
+  const toggle = (field) => (e) => {
+    e.stopPropagation()
+    update(movie, { [field]: !entry?.[field] }).catch(() => {})
+  }
 
   const onEnter = useCallback(() => {
     setHovered(true)
@@ -88,6 +99,35 @@ export default function MovieCard({ movie, index }) {
         loading="lazy"
         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
       />
+
+      {/* Save and favourite. Only shown to a signed-in visitor: a control that
+          can only fail is worse than no control. Always visible rather than
+          hover-only, since a phone has no hover. */}
+      {user && (
+        <motion.div
+          animate={{ opacity: showFrame ? 0 : 1 }}
+          transition={{ duration: 0.3 }}
+          style={{
+            position: 'absolute', bottom: 10, right: 10, zIndex: 3,
+            display: 'flex', flexDirection: 'column', gap: 6,
+          }}
+        >
+          <IconToggle
+            on={!!entry?.watchlist}
+            onClick={toggle('watchlist')}
+            label={entry?.watchlist ? 'Remove from watchlist' : 'Add to watchlist'}
+          >
+            <path d="M5 3h14v18l-7-5-7 5z" />
+          </IconToggle>
+          <IconToggle
+            on={!!entry?.favourite}
+            onClick={toggle('favourite')}
+            label={entry?.favourite ? 'Remove from favourites' : 'Add to favourites'}
+          >
+            <path d="M12 21s-8-4.6-8-10a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 11c0 5.4-8 10-8 10z" />
+          </IconToggle>
+        </motion.div>
+      )}
 
       {/* Type marker, so a mixed grid never leaves you guessing. Films carry no
           badge — they are the default, and labelling both would be noise. */}
@@ -205,5 +245,37 @@ export default function MovieCard({ movie, index }) {
         }}
       />
     </motion.div>
+  )
+}
+
+// A filled icon when set, an outline when not — colour alone would not survive
+// a colour-blind reader, and the title carries the state for a screen reader.
+function IconToggle({ on, onClick, label, children }) {
+  return (
+    <motion.button
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      aria-pressed={on}
+      whileHover={{ scale: 1.12 }}
+      whileTap={{ scale: 0.92 }}
+      style={{
+        width: 30, height: 30, borderRadius: '50%', border: 'none',
+        display: 'grid', placeItems: 'center', cursor: 'pointer',
+        background: on ? 'rgba(255,46,147,0.92)' : 'rgba(10,6,18,0.72)',
+        backdropFilter: 'blur(6px)',
+        boxShadow: on ? '0 2px 14px rgba(255,46,147,0.5)' : '0 2px 8px rgba(0,0,0,0.5)',
+        color: '#fff',
+      }}
+    >
+      <svg
+        width="15" height="15" viewBox="0 0 24 24"
+        fill={on ? 'currentColor' : 'none'}
+        stroke="currentColor" strokeWidth="1.9"
+        strokeLinejoin="round" aria-hidden="true"
+      >
+        {children}
+      </svg>
+    </motion.button>
   )
 }
