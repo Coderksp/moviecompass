@@ -99,15 +99,54 @@ export default function Navbar({ onSearch }) {
       }}
     >
       <a href="#top" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+        {/* Compass needle angled so it also reads as a play triangle. Sized to
+            match the height of the two-line wordmark beside it. */}
+        <svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true" style={{ display: 'block', flex: 'none' }}>
+          <defs>
+            <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#FF2E93" />
+              <stop offset="0.5" stopColor="#A855F7" />
+              <stop offset="1" stopColor="#00E5FF" />
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="8" fill="#0A0612" />
+          <circle cx="16" cy="16" r="10.5" fill="none" stroke="url(#logoGrad)" strokeWidth="1.6" opacity="0.45" />
+          <g transform="rotate(38 16 16)">
+            <polygon points="16,5.5 20.2,16 11.8,16" fill="url(#logoGrad)" />
+            <polygon points="16,26.5 20.2,16 11.8,16" fill="#A855F7" opacity="0.32" />
+          </g>
+          <circle cx="16" cy="16" r="1.5" fill="#0A0612" />
+        </svg>
+        {/* Two-line lockup: the mark carries the colour, so the name stays
+            clean white and the tagline sits under it as a quiet caption. */}
         <span style={{
-          width: 30, height: 30, borderRadius: 8,
-          background: 'conic-gradient(from 180deg, #ff2e93, #a855f7, #00e5ff, #ff2e93)',
-          display: 'inline-block',
-        }} />
-        <span className="grad-text" style={{
-          fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em',
+          display: 'inline-flex', flexDirection: 'column',
+          gap: 3, lineHeight: 1,
         }}>
-          Reelix
+          <span style={{
+            fontFamily: 'var(--font-display)',
+            fontWeight: 800,
+            // "Movie Compass" is twice the length of the old wordmark, so it
+            // steps down on narrow screens to keep clear of the search box.
+            fontSize: 'clamp(16px, 4.2vw, 20px)',
+            letterSpacing: '-0.03em',
+            fontVariationSettings: "'opsz' 40",
+            color: 'var(--text)',
+            whiteSpace: 'nowrap',
+          }}>
+            Movie Compass
+          </span>
+          <span className="wordmark-tagline" style={{
+            fontFamily: 'var(--font-body)',
+            fontWeight: 500,
+            fontSize: 8.5,
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            color: 'var(--text-dim)',
+            whiteSpace: 'nowrap',
+          }}>
+            Find your next film
+          </span>
         </span>
       </a>
 

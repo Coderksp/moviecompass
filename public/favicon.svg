@@ -7,6 +7,12 @@
     </linearGradient>
   </defs>
   <rect width="32" height="32" rx="8" fill="#0A0612"/>
-  <circle cx="16" cy="16" r="9" fill="none" stroke="url(#g)" stroke-width="2.5"/>
-  <polygon points="13,11 22,16 13,21" fill="url(#g)"/>
+  <circle cx="16" cy="16" r="10.5" fill="none" stroke="url(#g)" stroke-width="1.6" opacity="0.45"/>
+  <!-- Compass needle tilted to read as a play triangle: the lit half points the
+       way, the dim half is the tail. -->
+  <g transform="rotate(38 16 16)">
+    <polygon points="16,5.5 20.2,16 11.8,16" fill="url(#g)"/>
+    <polygon points="16,26.5 20.2,16 11.8,16" fill="#A855F7" opacity="0.32"/>
+  </g>
+  <circle cx="16" cy="16" r="1.5" fill="#0A0612"/>
 </svg>

@@ -62,6 +62,12 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+/* The wordmark's tagline is the first thing to go when space runs out — the
+   name and the mark still identify the app without it. */
+@media (max-width: 480px) {
+  .wordmark-tagline { display: none; }
+}
+
 ::-webkit-scrollbar { height: 8px; width: 8px; }
 ::-webkit-scrollbar-thumb { background: #2c1d44; border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: #3d2a5e; }
