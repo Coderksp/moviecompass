@@ -33,8 +33,8 @@ A colorful, animated movie discovery web app where **trailers play inline when y
 
 ### 1. Clone and install
 ```bash
-git clone https://github.com/Coderksp/reelix.git
-cd reelix
+git clone https://github.com/Coderksp/moviecompass.git
+cd moviecompass
 npm install
 ```
 
