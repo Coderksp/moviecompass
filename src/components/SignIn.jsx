@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { signIn, register } from '../auth'
 
@@ -12,6 +12,21 @@ export default function SignIn() {
   const [busy, setBusy] = useState(false)
 
   const creating = mode === 'register'
+
+  // A failed provider round trip comes back as a redirect carrying its reason,
+  // so it has to be read from the URL rather than from a response. The param is
+  // stripped afterwards, or the message would survive a refresh.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const reason = params.get('auth_error')
+    if (!reason) return
+    setError(reason)
+    params.delete('auth_error')
+    const rest = params.toString()
+    window.history.replaceState(
+      {}, '', window.location.pathname + (rest ? `?${rest}` : '')
+    )
+  }, [])
 
   const submit = async (e) => {
     e.preventDefault()
@@ -142,12 +157,11 @@ export default function SignIn() {
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          {/* Not wired yet. Signing someone in under a made-up name would be
-              worse than saying so: the account would be real, and shared by
-              everyone who pressed the button. */}
+          {/* A full page navigation, not fetch: the browser has to follow the
+              redirect to Google and come back with the session cookie set. */}
           <SocialButton
             label="Google"
-            onClick={() => setError('Google sign-in is not connected yet — use a username for now.')}
+            onClick={() => { window.location.href = '/api/auth/google/start' }}
           >
             <GoogleMark />
           </SocialButton>
