@@ -11,7 +11,10 @@ import {
   MEDIA_FILTERS,
   fetchCategory,
   fetchFeatured,
-  searchTitles,
+  fetchPersonCredits,
+  industryLang,
+  matchesIndustry,
+  searchMulti,
 } from './api/tmdb'
 
 export default function App() {
@@ -23,6 +26,10 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [media, setMedia] = useState('all')
+  const [people, setPeople] = useState([])
+  const [industry, setIndustry] = useState('all')
+  const [person, setPerson] = useState(null)      // the actor being browsed
+  const [credits, setCredits] = useState([])
 
   // Rails for every type load once; the filter only decides what is shown, so
   // switching between All/Movies/Series never refetches.
@@ -60,18 +67,32 @@ export default function App() {
 
   const handleSearch = useCallback(async (q) => {
     setQuery(q)
-    if (!q.trim()) { setResults([]); return }
+    setPerson(null)               // a new query leaves whoever's filmography we were in
+    if (!q.trim()) { setResults([]); setPeople([]); return }
     try {
-      const r = await searchTitles(q)
-      setResults(r)
+      const { titles, people: found } = await searchMulti(q)
+      setResults(titles)
+      setPeople(found)
     } catch (e) {
       setError(e.message)
     }
   }, [])
 
-  // Search spans both types, so the filter applies to results too.
-  const visibleResults = results.filter(
-    (r) => media === 'all' || r.mediaType === media
+  const openPerson = useCallback(async (p) => {
+    setPerson(p)
+    setCredits([])
+    try {
+      setCredits(await fetchPersonCredits(p.id))
+    } catch (e) {
+      setError(e.message)
+    }
+  }, [])
+
+  // Both filters apply to whichever set is on screen — an actor's filmography
+  // narrows by type and industry exactly like a title search does.
+  const lang = industryLang(industry)
+  const visibleResults = (person ? credits : results).filter(
+    (r) => (media === 'all' || r.mediaType === media) && matchesIndustry(r, lang)
   )
 
   return (
@@ -98,7 +119,16 @@ export default function App() {
       <AnimatePresence mode="wait">
         {query.trim() ? (
           <motion.main key="search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <SearchResults query={query} results={visibleResults} />
+            <SearchResults
+              query={query}
+              results={visibleResults}
+              people={people}
+              person={person}
+              onPerson={openPerson}
+              onClearPerson={() => setPerson(null)}
+              industry={industry}
+              onIndustry={setIndustry}
+            />
           </motion.main>
         ) : (
           <motion.main key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

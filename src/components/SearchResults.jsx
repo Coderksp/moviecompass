@@ -1,7 +1,11 @@
 import { motion } from 'framer-motion'
 import MovieCard from './MovieCard'
+import { IMG, INDUSTRIES } from '../api/tmdb'
 
-export default function SearchResults({ query, results }) {
+export default function SearchResults({
+  query, results, people = [], person, onPerson, onClearPerson,
+  industry = 'all', onIndustry,
+}) {
   return (
     <section style={{ padding: '6.5rem clamp(1rem, 4vw, 3rem) 3rem', minHeight: '80vh' }}>
       <motion.h2
@@ -9,15 +13,112 @@ export default function SearchResults({ query, results }) {
         animate={{ opacity: 1, y: 0 }}
         style={{
           fontFamily: 'var(--font-display)', fontWeight: 800,
-          fontSize: 'clamp(1.4rem, 3vw, 2.2rem)', marginBottom: 24,
+          fontSize: 'clamp(1.4rem, 3vw, 2.2rem)', marginBottom: 6,
         }}
       >
-        Results for <span className="grad-text">“{query}”</span>
+        {person ? (
+          <>Starring <span className="grad-text">{person.name}</span></>
+        ) : (
+          <>Results for <span className="grad-text">“{query}”</span></>
+        )}
       </motion.h2>
+
+      {person && (
+        <button
+          onClick={onClearPerson}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            color: 'var(--cyan)', fontSize: 13.5, marginBottom: 18,
+          }}
+        >
+          ← Back to results for “{query}”
+        </button>
+      )}
+
+      {/* Industry is the original language of a title, so this narrows any set
+          on screen — search results or an actor's filmography alike. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '14px 0 22px' }}>
+        {INDUSTRIES.map((ind) => {
+          const active = ind.id === industry
+          return (
+            <button
+              key={ind.id}
+              onClick={() => onIndustry(ind.id)}
+              aria-pressed={active}
+              title={ind.note}
+              style={{
+                padding: '5px 14px', borderRadius: 999, cursor: 'pointer',
+                fontSize: 13, fontWeight: 600,
+                color: active ? '#fff' : 'var(--text-dim)',
+                background: active
+                  ? 'linear-gradient(100deg, var(--magenta), var(--violet))'
+                  : 'rgba(26,16,41,0.7)',
+                border: active
+                  ? '1px solid transparent'
+                  : '1px solid rgba(168,85,247,0.25)',
+                transition: 'color .2s, background .2s, border-color .2s',
+              }}
+            >
+              {ind.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Matching actors, offered before the titles — searching a name usually
+          means "what else are they in", which a title grid can't answer. */}
+      {!person && people.length > 0 && (
+        <div style={{ marginBottom: 30 }}>
+          <h3 style={{
+            fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700,
+            textTransform: 'uppercase', letterSpacing: '0.09em',
+            color: 'var(--text-dim)', marginBottom: 12,
+          }}>
+            People
+          </h3>
+          <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 6 }}>
+            {people.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => onPerson(p)}
+                style={{
+                  flex: '0 0 auto', width: 108, background: 'none', border: 'none',
+                  cursor: 'pointer', padding: 0, textAlign: 'center', color: 'inherit',
+                }}
+              >
+                <span style={{
+                  display: 'block', width: 84, height: 84, margin: '0 auto 8px',
+                  borderRadius: '50%', overflow: 'hidden', background: 'var(--surface)',
+                  border: '1px solid rgba(168,85,247,0.3)',
+                }}>
+                  {p.profile_path && (
+                    <img
+                      src={IMG(p.profile_path, 'w185')}
+                      alt={p.name}
+                      loading="lazy"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                  )}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, display: 'block', lineHeight: 1.25 }}>
+                  {p.name}
+                </span>
+                {p.knownFor.length > 0 && (
+                  <span style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginTop: 2 }}>
+                    {p.knownFor.join(', ')}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {results.length === 0 ? (
         <p style={{ color: 'var(--text-dim)', fontSize: 16 }}>
-          No films found. Try another title.
+          {industry === 'all'
+            ? 'Nothing found. Try another title or name.'
+            : `Nothing here from ${INDUSTRIES.find((i) => i.id === industry)?.label}. Try “All”.`}
         </p>
       ) : (
         <div
@@ -28,7 +129,7 @@ export default function SearchResults({ query, results }) {
           }}
         >
           {results.map((m, i) => (
-            <MovieCard key={m.id} movie={m} index={i} />
+            <MovieCard key={`${m.mediaType}-${m.id}`} movie={m} index={i} />
           ))}
         </div>
       )}

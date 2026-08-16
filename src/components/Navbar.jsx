@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { IMG, searchTitles } from '../api/tmdb'
+import { IMG, searchMulti } from '../api/tmdb'
 
 export default function Navbar({ onSearch }) {
   const [scrolled, setScrolled] = useState(false)
@@ -31,9 +31,9 @@ export default function Navbar({ onSearch }) {
     let cancelled = false
     const t = setTimeout(async () => {
       try {
-        const r = await searchTitles(query)
+        const { titles } = await searchMulti(query)
         if (!cancelled) {
-          setSuggestions(r.slice(0, 6))
+          setSuggestions(titles.slice(0, 6))
           setActiveIndex(-1)
         }
       } catch (_) {

@@ -78,14 +78,69 @@ export async function fetchFeatured(media = 'all') {
   return pool[Math.floor(Math.random() * Math.min(5, pool.length))]
 }
 
-// Search covers both types in one request. People are filtered out — this is a
-// title search, and an actor row in the grid would have nothing to open.
-export async function searchTitles(query) {
-  if (!query.trim()) return []
+// "Industry" is not a TMDB concept, but it maps exactly onto the original
+// language of a title, which every search and discover result carries.
+export const INDUSTRIES = [
+  { id: 'all', label: 'All', lang: null, note: 'Every language' },
+  { id: 'hollywood', label: 'Hollywood', lang: 'en', note: 'English' },
+  { id: 'bollywood', label: 'Bollywood', lang: 'hi', note: 'Hindi' },
+  { id: 'kollywood', label: 'Kollywood', lang: 'ta', note: 'Tamil' },
+  { id: 'tollywood', label: 'Tollywood', lang: 'te', note: 'Telugu' },
+  { id: 'mollywood', label: 'Mollywood', lang: 'ml', note: 'Malayalam' },
+  { id: 'sandalwood', label: 'Sandalwood', lang: 'kn', note: 'Kannada' },
+  { id: 'korean', label: 'Korean', lang: 'ko', note: 'Korean' },
+  { id: 'japanese', label: 'Japanese', lang: 'ja', note: 'Japanese' },
+]
+
+export const industryLang = (id) =>
+  INDUSTRIES.find((i) => i.id === id)?.lang || null
+
+export const matchesIndustry = (item, lang) =>
+  !lang || item.original_language === lang
+
+// One request returns titles and people both. Titles feed the grid; people feed
+// the actor row, which is why they are kept rather than discarded.
+export async function searchMulti(query) {
+  if (!query.trim()) return { titles: [], people: [] }
   const data = await get('/search/multi', { query, include_adult: false })
-  return data.results
+  const titles = data.results
     .filter((m) => (m.media_type === 'movie' || m.media_type === 'tv') && hasArt(m))
     .map((m) => normalize(m))
+  const people = data.results
+    .filter((p) => p.media_type === 'person' && p.known_for_department === 'Acting')
+    .slice(0, 8)
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      profile_path: p.profile_path,
+      knownFor: (p.known_for || [])
+        .map((k) => k.title || k.name)
+        .filter(Boolean)
+        .slice(0, 2),
+    }))
+  return { titles, people }
+}
+
+// Everything an actor appears in, films and series together. TMDB lists a title
+// once per credited role, so the same show can appear several times — deduped
+// by type and id, then ordered by popularity so the recognisable work leads.
+const creditsCache = new Map()
+export async function fetchPersonCredits(personId) {
+  if (creditsCache.has(personId)) return creditsCache.get(personId)
+  const data = await get(`/person/${personId}/combined_credits`)
+  const seen = new Set()
+  const items = (data.cast || [])
+    .filter((c) => (c.media_type === 'movie' || c.media_type === 'tv') && hasArt(c))
+    .filter((c) => {
+      const k = `${c.media_type}:${c.id}`
+      if (seen.has(k)) return false
+      seen.add(k)
+      return true
+    })
+    .map((c) => normalize(c))
+    .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
+  creditsCache.set(personId, items)
+  return items
 }
 
 // Films and series share numeric id spaces, so every cache below is keyed by
