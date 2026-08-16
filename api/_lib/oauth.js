@@ -73,8 +73,24 @@ export function clearFlowCookie(res, extra = []) {
   ])
 }
 
+// PUBLIC_ORIGIN is trusted only if it parses. A typo there (a dropped character
+// in "https", say) would otherwise be pasted into every redirect_uri, and the
+// provider would reject the sign-in with a mismatch that points nowhere near
+// the real cause. A trailing slash is trimmed for the same reason: the URI must
+// match what was registered character for character.
 export function origin(req) {
-  if (process.env.PUBLIC_ORIGIN) return process.env.PUBLIC_ORIGIN
+  const configured = process.env.PUBLIC_ORIGIN?.trim()
+  if (configured) {
+    try {
+      const url = new URL(configured)
+      if (url.protocol === 'https:' || url.protocol === 'http:') {
+        return url.origin
+      }
+      console.error(`PUBLIC_ORIGIN has an unexpected protocol: ${configured}`)
+    } catch {
+      console.error(`PUBLIC_ORIGIN is not a valid URL, ignoring it: ${configured}`)
+    }
+  }
   const host = req.headers?.['x-forwarded-host'] || req.headers?.host
   const proto = req.headers?.['x-forwarded-proto'] || 'https'
   return `${proto}://${host}`
