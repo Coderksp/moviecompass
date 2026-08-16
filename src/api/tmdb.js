@@ -98,26 +98,52 @@ export const industryLang = (id) =>
 export const matchesIndustry = (item, lang) =>
   !lang || item.original_language === lang
 
+// Typing "tamil" means "show me Tamil films", not "find a title called tamil",
+// which is what a title search would do. Both the language and the industry
+// name resolve, since people reach for either.
+const LANGUAGE_ALIASES = {
+  english: 'hollywood', hollywood: 'hollywood',
+  hindi: 'bollywood', bollywood: 'bollywood',
+  tamil: 'kollywood', kollywood: 'kollywood',
+  telugu: 'tollywood', tollywood: 'tollywood',
+  malayalam: 'mollywood', mollywood: 'mollywood',
+  kannada: 'sandalwood', sandalwood: 'sandalwood',
+  korean: 'korean', kdrama: 'korean', 'k-drama': 'korean',
+  japanese: 'japanese', anime: 'japanese',
+}
+
+export function matchLanguageQuery(q) {
+  const key = String(q || '').trim().toLowerCase().replace(/\s+(movies?|films?|cinema)$/, '')
+  const id = LANGUAGE_ALIASES[key]
+  return id ? INDUSTRIES.find((i) => i.id === id) || null : null
+}
+
+// TMDB names the alphabetical sort differently per type — films sort on title,
+// series on name — and rejects the wrong one outright.
+const SORTS = {
+  alpha: { movie: 'title.asc', tv: 'name.asc' },
+  popular: { movie: 'popularity.desc', tv: 'popularity.desc' },
+}
+
 // Browsing by language, with no search behind it. The chips could only ever
 // narrow an existing result set before, which meant you had to think of
 // something to search before you could ask "what Tamil films are there".
 //
 // media is 'all' | 'movie' | 'tv'. For 'all' both are fetched and interleaved,
 // so one type does not simply sit above the other.
-export async function discoverByLanguage(lang, media = 'all', page = 1) {
+export async function discoverByLanguage(lang, media = 'all', sort = 'popular', page = 1) {
   if (!lang) return []
-  const params = {
-    with_original_language: lang,
-    sort_by: 'popularity.desc',
-    page,
-    // Titles nobody has rated are usually incomplete records rather than
-    // discoveries, and they crowd out the real answers.
-    'vote_count.gte': 10,
-  }
   const wanted = media === 'all' ? ['movie', 'tv'] : [media]
   const lists = await Promise.all(
     wanted.map((type) =>
-      get(`/discover/${type}`, params)
+      get(`/discover/${type}`, {
+        with_original_language: lang,
+        sort_by: (SORTS[sort] || SORTS.popular)[type],
+        page,
+        // Titles nobody has rated are usually incomplete records rather than
+        // discoveries, and they crowd out the real answers.
+        'vote_count.gte': 10,
+      })
         .then((d) => (d.results || []).filter(hasArt).map((m) => normalize(m, type)))
         .catch(() => [])
     )
@@ -125,6 +151,15 @@ export async function discoverByLanguage(lang, media = 'all', page = 1) {
   if (lists.length === 1) return lists[0]
 
   const [films, series] = lists
+  // Interleaving two A–Z lists would not be alphabetical, so a true sort has to
+  // happen across the merged set. localeCompare with numeric handling keeps
+  // "2.0" before "100" rather than sorting them as strings.
+  if (sort === 'alpha') {
+    return [...films, ...series].sort((a, b) =>
+      (a.title || '').localeCompare(b.title || '', undefined, { numeric: true, sensitivity: 'base' })
+    )
+  }
+
   const mixed = []
   for (let i = 0; i < Math.max(films.length, series.length); i++) {
     if (films[i]) mixed.push(films[i])

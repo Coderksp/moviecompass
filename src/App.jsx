@@ -16,6 +16,7 @@ import {
   INDUSTRIES,
   MEDIA_FILTERS,
   discoverByLanguage,
+  matchLanguageQuery,
   searchMulti as searchPeopleFor,
   fetchCategory,
   fetchFeatured,
@@ -134,21 +135,36 @@ export default function App() {
     (r) => (media === 'all' || r.mediaType === media) && matchesIndustry(r, lang)
   )
 
-  // Browsing a language with nothing else narrowing it: no query typed, no actor
-  // chosen. Otherwise the existing result set is filtered client-side instead,
-  // which is cheaper and keeps the actor's ordering intact.
-  const browseMode = !query.trim() && !person && industry !== 'all'
+  // Typing a language name is a request to browse it, not to find a title by
+  // that name — "tamil" as a title search returns nothing anyone wants.
+  const queryLanguage = matchLanguageQuery(query)
+
+  // Browsing a language: either typed, or chosen from a chip with nothing else
+  // narrowing it. An actor always wins, since their filmography is the more
+  // specific answer.
+  const browseIndustry = queryLanguage || (!query.trim() && industry !== 'all'
+    ? INDUSTRIES.find((i) => i.id === industry)
+    : null)
+  const browseMode = !person && !!browseIndustry
+
+  // A typed language reads as "list them", so it sorts A–Z. A chip is a
+  // browsing gesture, so it leads with what people actually watch. Either way
+  // the sort is switchable once you are there.
+  const [sort, setSort] = useState('popular')
+  useEffect(() => {
+    setSort(queryLanguage ? 'alpha' : 'popular')
+  }, [queryLanguage?.id, industry])
 
   useEffect(() => {
     if (!browseMode) { setBrowse([]); return }
     let cancelled = false
     setBrowsing(true)
-    discoverByLanguage(lang, media)
+    discoverByLanguage(browseIndustry.lang, media, sort)
       .then((rows) => { if (!cancelled) setBrowse(rows) })
       .catch(() => { if (!cancelled) setBrowse([]) })
       .finally(() => { if (!cancelled) setBrowsing(false) })
     return () => { cancelled = true }
-  }, [browseMode, lang, media])
+  }, [browseMode, browseIndustry?.lang, media, sort])
 
   // Computed from the unfiltered credits — these are career totals, not a count
   // of whatever survives the filters below.
@@ -199,7 +215,21 @@ export default function App() {
       <AnimatePresence>
         {/* A person opened from a film's cast has no search query behind it, so
             the filmography view has to stand on its own. */}
-        {query.trim() || person ? (
+        {browseMode ? (
+          /* A language, whether typed or chosen from a chip, answers "what is
+             there" — so it replaces the rails rather than sitting under them. */
+          <motion.main key="browse" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <BrowseGrid
+              label={browseIndustry.label}
+              note={browseIndustry.note}
+              items={browse}
+              loading={browsing}
+              sort={sort}
+              onSort={setSort}
+              typed={!!queryLanguage}
+            />
+          </motion.main>
+        ) : query.trim() || person ? (
           <motion.main key="search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <SearchResults
               query={query}
@@ -217,17 +247,6 @@ export default function App() {
           <motion.main key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <Hero movie={featured} />
             <div style={{ marginTop: '-2rem', position: 'relative', zIndex: 2 }}>
-              {/* A language chosen with nothing else narrowing it replaces the
-                  rails: the question is "what is there", not "what is popular". */}
-              {browseMode ? (
-                <BrowseGrid
-                  label={INDUSTRIES.find((i) => i.id === industry)?.label}
-                  note={INDUSTRIES.find((i) => i.id === industry)?.note}
-                  items={browse}
-                  loading={browsing}
-                />
-              ) : (
-                <>
               {/* Your own rails first — what you saved outranks what is trending. */}
               <LibraryRow title="Your watchlist" field="watchlist" library={library} />
               <LibraryRow title="Your favourites" field="favourite" library={library} />
@@ -239,8 +258,6 @@ export default function App() {
                   anchorId={cat.id}
                 />
               ))}
-                </>
-              )}
             </div>
             {loading && (
               <p style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem' }}>
@@ -344,18 +361,45 @@ function SignatureFooter() {
 }
 
 // Everything in a language, rather than rails of what happens to be popular.
-function BrowseGrid({ label, note, items, loading }) {
+function BrowseGrid({ label, note, items, loading, sort, onSort, typed }) {
   return (
-    <section style={{ padding: '1rem clamp(1rem, 4vw, 3rem) 2rem', minHeight: '60vh' }}>
+    <section style={{ padding: '5.5rem clamp(1rem, 4vw, 3rem) 2rem', minHeight: '70vh' }}>
       <h2 style={{
         fontFamily: 'var(--font-display)', fontWeight: 800,
         fontSize: 'clamp(1.3rem, 3vw, 2rem)', marginBottom: 4,
       }}>
         <span className="grad-text">{label}</span>
       </h2>
-      <p style={{ color: 'var(--text-dim)', fontSize: 13.5, margin: '0 0 20px' }}>
-        {note} · most popular first
+      <p style={{ color: 'var(--text-dim)', fontSize: 13.5, margin: '0 0 14px' }}>
+        {note}
+        {typed && ' · listed A–Z'}
       </p>
+
+      {/* Typed searches default to A–Z and chips to popular, but neither choice
+          should be a dead end once you are looking at the results. */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+        {[['alpha', 'A–Z'], ['popular', 'Most popular']].map(([id, text]) => {
+          const active = sort === id
+          return (
+            <button
+              key={id}
+              onClick={() => onSort(id)}
+              aria-pressed={active}
+              style={{
+                padding: '5px 14px', borderRadius: 999, cursor: 'pointer',
+                fontSize: 12.5, fontWeight: 600,
+                color: active ? '#fff' : 'var(--text-dim)',
+                background: active
+                  ? 'linear-gradient(100deg, var(--magenta), var(--violet))'
+                  : 'rgba(26,16,41,0.7)',
+                border: active ? '1px solid transparent' : '1px solid rgba(168,85,247,0.25)',
+              }}
+            >
+              {text}
+            </button>
+          )
+        })}
+      </div>
 
       {loading && !items.length && (
         <p style={{ color: 'var(--text-dim)', fontSize: 15 }}>Finding titles…</p>
