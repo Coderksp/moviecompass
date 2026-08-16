@@ -82,11 +82,11 @@ export default function SignIn() {
 
         <form onSubmit={submit} noValidate>
           <Field
-            label="Username"
+            label="Username or email"
             value={name}
             onChange={(v) => { setName(v); setError('') }}
             autoComplete="username"
-            placeholder="sugan"
+            placeholder="sugan or you@example.com"
           />
           <Field
             label="Password"

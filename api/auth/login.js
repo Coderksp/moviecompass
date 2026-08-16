@@ -37,9 +37,13 @@ export default async function handler(req, res) {
       })
     }
 
+    // Matched against either column: an account registered with an email is
+    // findable by that email, and one registered with a plain username by that.
     const rows = await sql`
       select id, username, password_hash from users
-      where lower(username) = lower(${name}) limit 1
+      where lower(username) = lower(${name})
+         or lower(email) = lower(${name})
+      limit 1
     `
     const user = rows[0]
 
