@@ -33,24 +33,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    const sql = db()
-    const ran = []
+    const client = db()
+    // .query() rather than the tagged form: these are fixed DDL statements held
+    // in code, not values, and the tagged form exists to bind values safely.
+    // Nothing here comes from the request.
     for (const statement of STATEMENTS) {
-      await sql(statement)
-      ran.push(statement.trim().split('\n')[0].slice(0, 60))
+      await client.query(statement)
     }
 
     // Report what actually exists afterwards, so a 200 means the schema is
     // really there rather than merely that nothing threw.
-    const tables = await sql(`
-      select table_name from information_schema.tables
-      where table_schema = 'public' order by table_name
-    `)
+    const result = await client.query(
+      `select table_name from information_schema.tables
+       where table_schema = 'public' order by table_name`
+    )
+    const rows = result?.rows || result || []
 
     return res.status(200).json({
       ok: true,
-      statementsRun: ran.length,
-      tables: tables.map((t) => t.table_name),
+      statementsRun: STATEMENTS.length,
+      tables: rows.map((t) => t.table_name),
     })
   } catch (err) {
     console.error('migrate failed:', err)

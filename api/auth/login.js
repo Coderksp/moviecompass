@@ -23,10 +23,13 @@ export default async function handler(req, res) {
   const name = username.trim()
 
   try {
+    // make_interval rather than interval '${n} minutes': a bound parameter
+    // cannot appear inside a string literal, so the latter would send the SQL
+    // the placeholder itself and fail on every request.
     const recent = await sql`
       select count(*)::int as n from login_attempts
       where lower(username) = lower(${name})
-        and attempted > now() - interval '${WINDOW_MINUTES} minutes'
+        and attempted > now() - make_interval(mins => ${WINDOW_MINUTES})
     `
     if ((recent[0]?.n || 0) >= MAX_ATTEMPTS) {
       return res.status(429).json({
