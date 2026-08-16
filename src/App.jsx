@@ -6,6 +6,8 @@ import Row from './components/Row'
 import SearchResults from './components/SearchResults'
 import MovieModal from './components/MovieModal'
 import { MovieModalContext, OpenPersonContext } from './movieModal'
+import SignIn from './components/SignIn'
+import { useUser } from './auth'
 import {
   CATEGORIES,
   MEDIA_FILTERS,
@@ -21,6 +23,7 @@ import {
 } from './api/tmdb'
 
 export default function App() {
+  const user = useUser()
   const [featured, setFeatured] = useState(null)
   const [rows, setRows] = useState({})
   const [query, setQuery] = useState('')
@@ -110,6 +113,17 @@ export default function App() {
   // Computed from the unfiltered credits — these are career totals, not a count
   // of whatever survives the filters below.
   const stats = person && credits.length ? personStats(credits, ratings) : null
+
+  // The aurora backdrop stays behind the gate so it doesn't appear from nowhere
+  // once you're through.
+  if (!user) {
+    return (
+      <div className="app">
+        <div className="aurora"><span /><span /><span /></div>
+        <SignIn />
+      </div>
+    )
+  }
 
   return (
     <MovieModalContext.Provider value={setSelected}>

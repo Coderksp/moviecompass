@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { IMG, searchMulti } from '../api/tmdb'
+import { useUser, signOut } from '../auth'
 
 export default function Navbar({ onSearch }) {
   const [scrolled, setScrolled] = useState(false)
@@ -258,6 +259,34 @@ export default function Navbar({ onSearch }) {
           )}
         </AnimatePresence>
       </div>
+
+      <SignOutChip />
     </motion.nav>
+  )
+}
+
+// The signed-in initial, doubling as the way back out. A single circle costs
+// almost no width beside the search box on a phone.
+function SignOutChip() {
+  const user = useUser()
+  if (!user) return null
+  const initial = (user.name || '?').trim().charAt(0).toUpperCase()
+
+  return (
+    <button
+      onClick={signOut}
+      title={`Signed in as ${user.name} — sign out`}
+      aria-label={`Signed in as ${user.name}. Sign out.`}
+      style={{
+        marginLeft: 10, flex: 'none', width: 34, height: 34, borderRadius: '50%',
+        display: 'grid', placeItems: 'center', cursor: 'pointer',
+        border: '1px solid rgba(168,85,247,0.4)',
+        background: 'linear-gradient(120deg, rgba(255,46,147,0.22), rgba(168,85,247,0.22))',
+        color: 'var(--text)', fontFamily: 'var(--font-display)',
+        fontWeight: 800, fontSize: 14, lineHeight: 1,
+      }}
+    >
+      {initial}
+    </button>
   )
 }
