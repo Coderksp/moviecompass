@@ -15,7 +15,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: process.env.VITE_DEV_API || 'https://reelix-k6xy.vercel.app',
+        target: process.env.VITE_DEV_API || 'https://moviecompassf.vercel.app',
         changeOrigin: true,
         secure: true,
       },
