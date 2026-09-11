@@ -9,6 +9,7 @@ import {
   watchProviders,
   WATCH_REGIONS,
 } from '../api/tmdb'
+import SimilarTitles from './SimilarTitles'
 import { useRegion, setRegion } from '../region'
 import { useOpenPerson, useRequestSignIn } from '../movieModal'
 import { useEntry, update } from '../library'
@@ -292,6 +293,12 @@ export default function MovieModal({ movie, onClose }) {
                   </div>
                 </div>
               )}
+
+              {/* What to watch next. It sits after the cast because the cast is
+                  about the film you are looking at and this is about leaving
+                  it — and before the reviews, since deciding what to watch
+                  next beats reading a stranger on what you just watched. */}
+              <SimilarTitles movie={data} />
 
               {/* Reviews */}
               <div style={{ marginBottom: 22 }}>

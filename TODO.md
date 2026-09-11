@@ -17,6 +17,7 @@ Things that turned out to be needed once the app met the real world.
 - [x] **Real accounts** — Postgres on Neon, bcrypt at cost 12, sessions as httpOnly cookies, rate-limited login.
 - [x] **Google sign-in** — authorization-code flow with PKCE and id_token signature verification.
 - [x] **Trailer language fix** — TMDB filters videos to English by default, so regional films appeared to have no trailer at all.
+- [x] **Recommendations that can explain themselves** — every suggestion carries the connection it was scored on, so nothing reaches the rail that the app cannot say something concrete about.
 
 ---
 
@@ -41,7 +42,7 @@ Things that turned out to be needed once the app met the real world.
 ## 🎥 Movie Detail & Media
 - [x] **Full trailer modal** — click to open the trailer full-size with sound.
 - [x] **Cast & crew** in the detail modal, with photos, each opening that person's filmography.
-- [ ] **Similar / recommended** titles inside the modal.
+- [x] **Similar / recommended** titles inside the modal. *(A "More like this" rail driven by the hybrid recommender in `api/_lib/recommend.js` — five candidate generators fused by reciprocal rank, a two-stage ranker, MMR for spread, and a one-line reason under every title.)*
 - [ ] **Backdrop gallery** — swipeable stills and posters.
 - [x] **Where to watch** — watch-provider logos per region, with a country picker.
 - [x] **Reviews** — top TMDB user reviews in the modal.
