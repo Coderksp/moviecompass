@@ -74,6 +74,62 @@ function termCounts(text) {
 const ids = (arr, n = Infinity) =>
   new Set((arr || []).slice(0, n).map((x) => x.id).filter(Boolean))
 
+// Who a title was made for, on one scale across both rating systems.
+//
+// This is the signal that separates recommendations nothing else catches.
+// Zootopia shares a keyword with Inception and The Legend of Korra shares one
+// with Game of Thrones; both are perfectly real matches on every content
+// feature, and both are children's titles being offered beside an adult one.
+// Genre does not see it — Korra and Thrones are both fantasy drama — and neither
+// does a keyword, because "dragon" means the same thing to a nine-year-old.
+const MATURITY = {
+  G: 0, 'TV-Y': 0, 'TV-G': 0, 'TV-Y7': 0.5,
+  PG: 1, 'TV-PG': 1,
+  'PG-13': 2, 'TV-14': 2,
+  R: 3, 'TV-MA': 3,
+  'NC-17': 4,
+}
+
+// US certifications, because they are the ones TMDB has most consistently. The
+// two media types keep them in different places and neither is present unless
+// asked for by name in append_to_response.
+export function maturityOf(data) {
+  const fromMovie = (data.release_dates?.results || [])
+    .find((r) => r.iso_3166_1 === 'US')
+    ?.release_dates?.map((r) => r.certification)
+    .find(Boolean)
+  const fromTv = (data.content_ratings?.results || [])
+    .find((r) => r.iso_3166_1 === 'US')?.rating
+
+  const cert = (fromMovie || fromTv || '').trim().toUpperCase()
+  return cert in MATURITY ? MATURITY[cert] : null
+}
+
+// Deliberately one-directional, because the mistake only happens in one
+// direction.
+//
+// Suggesting something made for an older audience than the film in hand is
+// normal and often right — The Matrix is R where Inception is PG-13, and nobody
+// watching one would be surprised to be handed the other. Suggesting something
+// made for a younger one is the failure this feature exists to catch: Zootopia
+// after Inception, Treasure Planet after Inception, The Legend of Korra after
+// Game of Thrones. Each is a real match on keywords or cast, and each is a
+// children's title being offered to someone who was not watching one.
+//
+// So the gap is only counted when the candidate is the milder of the two, and
+// then counted steeply: one step down costs about half the feature, two steps
+// very nearly all of it.
+//
+// Unrated is common rather than exceptional; Vikram carries no US certificate at
+// all, as most regional cinema does. So a missing rating is neutral rather than
+// suspect, and since a regional seed's candidates are usually unrated too, the
+// feature simply goes quiet for them instead of penalising a whole industry.
+const maturitySimilarity = (seed, cand) => {
+  if (seed == null || cand == null) return 0.75
+  if (cand >= seed) return 1
+  return Math.exp(-(((seed - cand) / 1.2) ** 2))
+}
+
 // Everything the model knows about one title, in the shape the scorer wants.
 // Built from a full detail payload where one is available and from a list entry
 // where one is not — `depth` says which, so the scorer knows whether an empty
@@ -121,6 +177,7 @@ export function profile(data, mediaType) {
     votes: data.vote_count || 0,
     score: data.vote_average || 0,
     popularity: data.popularity || 0,
+    maturity: maturityOf(data),
     overview: data.overview || '',
     terms: termCounts(data.overview),
   }
@@ -282,15 +339,19 @@ const qualityPrior = (p) => Math.min(1, publicOpinion(p) / 35)
 // only does work on the regional titles, where it is the difference between
 // Vikram suggesting Kaithi and Vikram suggesting Die Hard because both were
 // tagged "shootout".
+// Maturity is small but decisive, because it is the only feature that fires on
+// the mistakes the others cannot see at all — a children's title that matches on
+// every content signal there is.
 export const WEIGHTS = {
-  keyword: 0.28,
-  prior: 0.24,
-  people: 0.14,
-  language: 0.09,
-  text: 0.08,
-  genre: 0.07,
-  quality: 0.05,
-  era: 0.05,
+  keyword: 0.26,
+  prior: 0.23,
+  people: 0.13,
+  language: 0.08,
+  genre: 0.08,
+  text: 0.07,
+  maturity: 0.07,
+  quality: 0.04,
+  era: 0.04,
 }
 
 // Stage one. Only the features that arrive free on a list result, so the whole
@@ -320,7 +381,16 @@ export function coarseScore(seed, cand, prior) {
 // Stage two. Everything, on the shortlist that survived stage one.
 export function fineScore(seed, cand, prior, idf) {
   const keyword = weightedCosine(seed.keywords, cand.keywords, idf.keyword)
-  const genre = jaccard(seed.genres, cand.genres)
+
+  // Genre is weighted by how distinctive each genre is within this pool, rather
+  // than counted flat. A flat count cannot tell apart two films that overlap the
+  // seed by one genre each, and the difference is the whole question: Arrival
+  // shares Science Fiction with Inception and Zootopia shares Adventure. Plain
+  // Jaccard scores those 0.20 and 0.17 — indistinguishable. Weighted, they are
+  // 0.20 and 0.11, because Zootopia's identity is mostly in genres this pool has
+  // never heard of.
+  const genre = weightedCosine(seed.genres, cand.genres, idf.genre)
+
   const castOverlap = jaccard(seed.cast, cand.cast)
   const sharedDirector = intersect(seed.directors, cand.directors) > 0 ? 1 : 0
   // A shared director says more than a shared supporting actor, but a cast in
@@ -331,6 +401,7 @@ export function fineScore(seed, cand, prior, idf) {
   const era = eraSimilarity(seed.year, cand.year)
   const language = seed.lang && cand.lang === seed.lang ? 1 : 0
   const quality = qualityPrior(cand)
+  const maturity = maturitySimilarity(seed.maturity, cand.maturity)
 
   const w = WEIGHTS
   const score =
@@ -339,13 +410,21 @@ export function fineScore(seed, cand, prior, idf) {
     w.genre * genre +
     w.people * people +
     w.text * text +
+    w.maturity * maturity +
     w.era * era +
     w.language * language +
     w.quality * quality
 
   return {
     score,
-    parts: { prior, keyword, genre, people, text, era, language, quality, castOverlap, sharedDirector },
+    parts: {
+      prior, keyword, genre, people, text, maturity, era, language, quality,
+      castOverlap, sharedDirector,
+      // The count as well as the cosine. The cosine says how strong the overlap
+      // is relative to how much each title is tagged; the gate below needs to
+      // know whether there was more than one thing in common at all.
+      sharedKeywords: intersect(seed.keywords, cand.keywords),
+    },
   }
 }
 
@@ -361,16 +440,42 @@ export function fineScore(seed, cand, prior, idf) {
 // It doubles as an honesty check on the captions. Every reason the rail shows is
 // built from the features that fired, so a candidate with nothing to say about
 // itself is one the app would have to pad a sentence about.
-// A shared actor is the weakest of these and needs corroborating: Joseph
+// A shared director carries on its own, because choosing a director is much
+// closer to choosing a film than anything else here.
+//
+// Everything weaker needs corroborating. A shared actor does: Joseph
 // Gordon-Levitt is in both Inception and Treasure Planet, and only one of those
-// is a recommendation. So a cast match has to come with the film being roughly
-// the same kind of thing. A shared director carries on its own, because choosing
-// a director is much closer to choosing a film.
+// is a recommendation. And so does a *single* shared keyword, which was how
+// Zootopia came to be recommended alongside Inception — the two have exactly
+// "allegory" in common and nothing else whatsoever.
+//
+// Two shared keywords is a different claim and stands by itself. One is a
+// coincidence until something else agrees with it.
+// The corroboration a lone keyword needs is that the title is recognisably the
+// same kind of thing, for the same audience — genre affinity and maturity
+// together, since either alone is too easily fooled.
+//
+// Measured on the real shortlist for Inception, genre alone does not separate
+// these: Arrival scores 0.14 and Zootopia 0.08, close enough that any threshold
+// between them is really a threshold between one pool and the next. Multiplied
+// by the audience match they part properly — Arrival 0.14, Zootopia 0.05 —
+// because Arrival is a science-fiction film for the same viewers and Zootopia is
+// a children's cartoon that happens to carry the same one-word tag.
+const sameKindOfThing = (parts) => parts.genre * parts.maturity
+
+// Every condition here is one the caption writer below can put into words, and
+// that is the point rather than a coincidence. Overlap in the wording of two
+// synopses is deliberately *not* among them: it is a real signal and it still
+// counts towards the score, but there is no honest one-line way to say "these
+// two plot summaries use some of the same words". Admitting it here produced
+// exactly what you would expect — It's Always Sunny in Philadelphia recommended
+// after Game of Thrones, with the caption left blank because nothing in the
+// model could account for it.
 export const connected = (parts) =>
-  parts.keyword > 0.02 ||
   parts.sharedDirector === 1 ||
-  parts.text > 0.08 ||
-  (parts.castOverlap > 0 && parts.genre > 0.2)
+  parts.sharedKeywords >= 2 ||
+  (parts.castOverlap > 0 && sameKindOfThing(parts) > 0.10) ||
+  (parts.sharedKeywords === 1 && sameKindOfThing(parts) > 0.10)
 
 // ---------------------------------------------------------------------------
 // Shortlisting
@@ -446,15 +551,29 @@ function candidateSimilarity(a, b) {
 // picked, so the second Nolan film has to clear a higher bar than the first.
 // lambda is how much relevance is traded for spread — 0.78 keeps the list
 // obviously on-topic while breaking up runs.
+// A hard cap alongside the soft one, because the soft one is not enough on its
+// own. Every Matrix film is a defensible answer to "something like Inception",
+// they all score within 0.07 of each other, and the marginal-relevance penalty
+// is a percentage of a score — so when the rest of the pool is weak, four of
+// them still clear the bar and the rail becomes a franchise listing. Two is
+// plenty to make the point that a series exists.
+const MAX_PER_COLLECTION = 2
+
 export function diversify(ranked, count, lambda = 0.78) {
   const picked = []
   const rest = [...ranked]
+  const fromCollection = new Map()
+
+  const atCap = (item) =>
+    item.profile.collection &&
+    (fromCollection.get(item.profile.collection) || 0) >= MAX_PER_COLLECTION
 
   while (picked.length < count && rest.length) {
-    let bestIndex = 0
+    let bestIndex = -1
     let bestValue = -Infinity
 
     for (let i = 0; i < rest.length; i++) {
+      if (atCap(rest[i])) continue
       const worst = picked.reduce(
         (max, p) => Math.max(max, candidateSimilarity(rest[i].profile, p.profile)),
         0
@@ -465,7 +584,19 @@ export function diversify(ranked, count, lambda = 0.78) {
         bestIndex = i
       }
     }
-    picked.push(rest.splice(bestIndex, 1)[0])
+
+    // Everything left is a third helping of something already shown. A short
+    // rail beats a padded one, so this stops rather than relaxing the cap.
+    if (bestIndex === -1) break
+
+    const [chosen] = rest.splice(bestIndex, 1)
+    if (chosen.profile.collection) {
+      fromCollection.set(
+        chosen.profile.collection,
+        (fromCollection.get(chosen.profile.collection) || 0) + 1
+      )
+    }
+    picked.push(chosen)
   }
   return picked
 }

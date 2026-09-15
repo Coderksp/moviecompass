@@ -281,9 +281,14 @@ async function generate(seed, mediaType, details) {
 // The pipeline
 // ---------------------------------------------------------------------------
 
+// Certifications live under a different key per media type, and neither is
+// returned unless it is asked for by name. Bundling them into the lookup each
+// title already makes means the maturity feature costs no extra requests.
+const CERTIFICATION = { movie: 'release_dates', tv: 'content_ratings' }
+
 async function rank(id, mediaType) {
   const details = await tmdb(`/${mediaType}/${id}`, {
-    append_to_response: 'keywords,credits,recommendations',
+    append_to_response: `keywords,credits,recommendations,${CERTIFICATION[mediaType]}`,
   })
   const seed = profile(details, mediaType)
 
@@ -308,7 +313,7 @@ async function rank(id, mediaType) {
     coarse.map(async (row) => {
       try {
         const full = await tmdb(`/${row.cand.mediaType}/${row.cand.id}`, {
-          append_to_response: 'keywords,credits',
+          append_to_response: `keywords,credits,${CERTIFICATION[row.cand.mediaType]}`,
         })
         return { ...row, cand: profile(full, row.cand.mediaType), full }
       } catch {
@@ -325,6 +330,10 @@ async function rank(id, mediaType) {
   const idf = {
     keyword: idfOver(profiles, (p) => p.keywords),
     text: idfOver(profiles, (p) => p.terms.keys()),
+    // Genres too. In a pool generated from a science-fiction film nearly
+    // everything is science fiction, so sharing that says little, while sharing
+    // something the pool rarely sees says a lot.
+    genre: idfOver(profiles, (p) => p.genres),
   }
 
   const scored = enriched
@@ -333,11 +342,18 @@ async function rank(id, mediaType) {
       return {
         score,
         parts,
+        reason: ruleReason(seed, row.cand, parts),
         profile: row.cand,
         item: row.full || row.entry.item,
         sources: [...row.entry.sources],
       }
     })
+    // Nothing the app cannot describe is ever shown, including among the
+    // fill-ins below. Without this the padding is where the embarrassments come
+    // from: It's Always Sunny in Philadelphia arrived under Game of Thrones with
+    // a blank caption, because the rail needed a twelfth title and stopped
+    // asking questions once it did.
+    .filter((p) => p.reason)
     .sort((a, b) => b.score - a.score)
 
   // Candidates with something concrete to say go first, and the rest are only
@@ -545,7 +561,7 @@ export default async function handler(req, res) {
         // Rounded because these are shown to a person, not compared by one.
         match: Math.round(p.score * 100) / 100,
         why: p.sources,
-        reason: reasons?.get(key) || ruleReason(seed, p.profile, p.parts),
+        reason: reasons?.get(key) || p.reason,
       }
     })
 
