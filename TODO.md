@@ -23,10 +23,10 @@ Things that turned out to be needed once the app met the real world.
 
 ## 🔍 Discovery & Browsing
 - [ ] **Genre filter chips** — filterable pills above the rails to jump to a genre.
-- [ ] **Sort controls** — sort rails/search by popularity, rating, release date, or A–Z.
+- [x] **Sort controls** — Most popular, Top rated and A–Z on every industry. *(Top rated needs a vote floor that differs per industry: English settles at five thousand, Malayalam at fifty, and one number for both erases regional cinema.)*
 - [ ] **Advanced filters** — year range, minimum rating, runtime. *(Language shipped; the rest have not.)*
 - [x] **"For you" rail** — a curated home-page rail built from a weighted model of everything you have rated, hearted and saved. *(Went further than "the last movie viewed": one taste profile across the whole library, so it reflects what you like rather than what you last clicked.)*
-- [ ] **Infinite scroll / "Load more"** on rails and search results. *(Browse grids are capped at one page.)*
+- [x] **Infinite scroll** on browse grids — the next page loads itself as you reach the bottom, watched with an IntersectionObserver rather than a scroll handler.
 - [ ] **Trending toggle** — switch between "Trending today" and "Trending this week".
 - [x] **TV shows** — extend beyond movies to include series (TMDB `/tv` endpoints).
 - [x] **Person pages** — click an actor/director to see their filmography.

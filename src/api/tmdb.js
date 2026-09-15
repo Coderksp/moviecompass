@@ -90,6 +90,10 @@ export const INDUSTRIES = [
   { id: 'sandalwood', label: 'Sandalwood', lang: 'kn', note: 'Kannada' },
   { id: 'korean', label: 'Korean', lang: 'ko', note: 'Korean' },
   { id: 'japanese', label: 'Japanese', lang: 'ja', note: 'Japanese' },
+  // Anime is the one entry here that is not simply a language. Japanese alone
+  // sweeps in Kurosawa and every live-action drama ever made, which is not what
+  // anybody choosing this chip is asking for, so it is Japanese *and* animated.
+  { id: 'anime', label: 'Anime', lang: 'ja', genre: 16, note: 'Japanese animation' },
 ]
 
 export const industryLang = (id) =>
@@ -113,9 +117,17 @@ export const industryLang = (id) =>
 // noticed by anybody at all.
 const MIN_CROSSOVER_VOTES = 10
 
-export const matchesIndustry = (item, lang, homeLang = null) => {
+// `industry` is an entry from INDUSTRIES, or null for "All".
+export const matchesIndustry = (item, industry, homeLang = null) => {
+  const lang = industry?.lang
   if (!lang) return true
   if (item.original_language !== lang) return false
+  // Anime carries a genre as well as a language, and a search result knows its
+  // genres only as ids.
+  if (industry.genre && !(item.genre_ids || []).includes(industry.genre)) {
+    const onDetail = (item.genres || []).some((g) => g.id === industry.genre)
+    if (!onDetail) return false
+  }
   if (homeLang && lang !== homeLang && (item.vote_count || 0) < MIN_CROSSOVER_VOTES) {
     return false
   }
@@ -145,7 +157,7 @@ const LANGUAGE_ALIASES = {
   malayalam: 'mollywood', mollywood: 'mollywood',
   kannada: 'sandalwood', sandalwood: 'sandalwood',
   korean: 'korean', kdrama: 'korean', 'k-drama': 'korean',
-  japanese: 'japanese', anime: 'japanese',
+  japanese: 'japanese', anime: 'anime',
 }
 
 export function matchLanguageQuery(q) {
@@ -159,7 +171,39 @@ export function matchLanguageQuery(q) {
 const SORTS = {
   alpha: { movie: 'title.asc', tv: 'name.asc' },
   popular: { movie: 'popularity.desc', tv: 'popularity.desc' },
+  rated: { movie: 'vote_average.desc', tv: 'vote_average.desc' },
 }
+
+// How many votes a title needs before its average is worth believing.
+//
+// Sorting by rating without a floor returns nonsense — a 10.0 from thirteen
+// votes outranks The Godfather. One floor for everything does not work either,
+// because TMDB's voting population is wildly uneven across industries, and a
+// number that cleans up English erases regional cinema entirely.
+//
+// Measured, not guessed. English films need around five thousand before the
+// list settles into Shawshank and the Godfathers; below two thousand it is still
+// offering curiosities with a couple of hundred votes. Malayalam at fifty gives
+// Kumbalangi Nights, Kammatti Paadam and Manjummel Boys — exactly right — while
+// the same five thousand would return an empty page. Series everywhere carry far
+// fewer votes than films, and regional series fewer still: Tamil television has
+// barely a handful of titles above thirty votes at all.
+const VOTE_FLOORS = {
+  en: { movie: 5000, tv: 1000 },
+  ko: { movie: 200, tv: 200 },
+  ja: { movie: 200, tv: 200 },
+  default: { movie: 50, tv: 20 },
+}
+
+const voteFloor = (lang, type, sort) =>
+  // Only the rating sort needs protecting. Popularity and A-Z are not distorted
+  // by a thinly-voted title, and a high floor there would quietly hide things
+  // people are looking for.
+  sort === 'rated'
+    ? (VOTE_FLOORS[lang] || VOTE_FLOORS.default)[type]
+    // Titles nobody has rated are usually incomplete records rather than
+    // discoveries, and they crowd out the real answers.
+    : 10
 
 // Browsing by language, with no search behind it. The chips could only ever
 // narrow an existing result set before, which meant you had to think of
@@ -172,18 +216,19 @@ export const byTitle = (a, b) =>
 
 // Returns { items, hasMore } — hasMore so a "Load more" can disappear at the end
 // rather than fetching nothing and looking broken.
-export async function discoverByLanguage(lang, media = 'all', sort = 'popular', page = 1) {
+export async function discoverByLanguage(industry, media = 'all', sort = 'popular', page = 1) {
+  const lang = industry?.lang
   if (!lang) return { items: [], hasMore: false }
   const wanted = media === 'all' ? ['movie', 'tv'] : [media]
   const pages = await Promise.all(
     wanted.map((type) =>
       get(`/discover/${type}`, {
         with_original_language: lang,
+        // Only anime sets this today; every other chip is a language alone.
+        ...(industry.genre ? { with_genres: industry.genre } : {}),
         sort_by: (SORTS[sort] || SORTS.popular)[type],
         page,
-        // Titles nobody has rated are usually incomplete records rather than
-        // discoveries, and they crowd out the real answers.
-        'vote_count.gte': 10,
+        'vote_count.gte': voteFloor(lang, type, sort),
       })
         .then((d) => ({
           items: (d.results || []).filter(hasArt).map((m) => normalize(m, type)),
