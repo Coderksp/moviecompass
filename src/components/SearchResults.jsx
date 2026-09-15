@@ -5,7 +5,7 @@ import { IMG, INDUSTRIES, CREDIT_ORDERS } from '../api/tmdb'
 export default function SearchResults({
   query, results, people = [], person, stats, onPerson, onClearPerson,
   industry = 'all', onIndustry,
-  decades = [], decade = null, onDecade, order = 'known', onOrder,
+  decades = [], creditTotal = 0, decade = null, onDecade, order = 'known', onOrder,
 }) {
   return (
     <section style={{ padding: '6.5rem clamp(1rem, 4vw, 3rem) 3rem', minHeight: '80vh' }}>
@@ -50,7 +50,7 @@ export default function SearchResults({
           onDecade={onDecade}
           order={order}
           onOrder={onOrder}
-          total={decades.reduce((n, d) => n + d.count, 0)}
+          total={creditTotal}
         />
       )}
 
@@ -135,6 +135,12 @@ export default function SearchResults({
 // The decade chips carry their counts because the counts are the interesting
 // part — they show the shape of a career at a glance, where the working years
 // were and where they thinned out, before anything is clicked.
+//
+// "All" is given the real number of credits rather than the sum of the decades,
+// and the difference is not always zero: a credit with no release date belongs
+// to no decade but is still shown under All. Adding the chips up gave Ajith
+// Kumar "All 60" above sixty-two films, which is the kind of number somebody
+// checks once, disbelieves, and then stops trusting the rest of the page over.
 function CareerFilters({ decades, decade, onDecade, order, onOrder, total }) {
   return (
     <div style={{ marginBottom: 22 }}>
