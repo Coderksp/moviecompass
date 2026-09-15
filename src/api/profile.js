@@ -32,8 +32,8 @@ function get(path) {
 }
 
 // Identity, counts, and what the model believes about your taste.
-export const fetchProfile = () => get('/api/profile')
+export const fetchProfile = () => get('/api/you?want=profile')
 
 // The curated rail. Resolves with ready:false and a count of how many more
 // titles are needed when there is not yet enough to go on.
-export const fetchForYou = () => get('/api/for-you')
+export const fetchForYou = () => get('/api/you?want=picks')

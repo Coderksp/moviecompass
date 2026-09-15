@@ -6,15 +6,14 @@
 // they are seeded from the handful of titles somebody actually rates highly, and
 // that the results are scored against their whole taste instead of any one film.
 //
-// Unlike /api/similar, nothing here may be cached at the edge. The answer is
-// about one person, and a shared cache would hand somebody else's taste to the
-// next visitor.
-import { requireUser, applyCors } from './_lib/session.js'
-import { profile, fuse, shortlist, diversify } from './_lib/recommend.js'
-import { generate, enrich } from './_lib/candidates.js'
-import { tasteScore, tasteReason, tasteConnected, because } from './_lib/taste.js'
-import { viewerTaste, fingerprintOf, MIN_SIGNALS } from './_lib/viewer.js'
-import { explainForYou } from './_lib/explain.js'
+// It lives under _lib rather than being its own route because Vercel's Hobby
+// plan allows twelve serverless functions and this project sits on that ceiling.
+// /api/you is the one function; this is half of what it serves.
+import { profile, fuse, shortlist, diversify } from './recommend.js'
+import { generate, enrich } from './candidates.js'
+import { tasteScore, tasteReason, tasteConnected, because } from './taste.js'
+import { viewerTaste, fingerprintOf, MIN_SIGNALS } from './viewer.js'
+import { explainForYou } from './explain.js'
 
 // How many of their titles seed the search. Each one costs a full round of
 // generator queries, and past four or five the candidates are overwhelmingly
@@ -137,18 +136,10 @@ function cached(userId, fingerprint) {
   return cache.get(key)
 }
 
-export default async function handler(req, res) {
-  applyCors(req, res)
-  if (req.method === 'OPTIONS') return res.status(204).end()
-
-  const user = await requireUser(req, res)
-  if (!user) return
-
-  if (!process.env.TMDB_API_KEY) {
-    return res.status(500).json({ error: 'TMDB_API_KEY is not set on the server.' })
-  }
-
-  try {
+// Returns the response body. Throwing is left to the caller to turn into a
+// status, so the route stays the only place that knows about HTTP.
+export async function forYouBody(user) {
+  {
     // Cheap enough to run on every request, and it is what makes the cache
     // correct rather than merely fast.
     const fingerprint = await fingerprintOf(user.id)
@@ -175,9 +166,7 @@ export default async function handler(req, res) {
     // Private, and briefly. The answer belongs to one person, so a shared cache
     // would be a data leak rather than an optimisation; the short window is only
     // there to stop a double render paying for the whole pipeline twice.
-    res.setHeader('Cache-Control', 'private, max-age=120')
-
-    return res.status(200).json({
+    return ({
       ready,
       // What the empty state needs to say: how many more titles to rate before
       // this becomes worth showing.
@@ -203,8 +192,5 @@ export default async function handler(req, res) {
         }
       }),
     })
-  } catch (err) {
-    console.error('for-you failed:', err)
-    return res.status(500).json({ error: 'Could not build your recommendations.' })
   }
 }

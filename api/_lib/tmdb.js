@@ -1,7 +1,7 @@
 // Talking to TMDB from inside a serverless function.
 //
-// Shared by /api/similar and /api/for-you, which ask the same questions of the
-// same API and differ only in what they are asking on behalf of — one film, or
+// Shared by /api/similar and /api/you, which ask the same questions of the same
+// API and differ only in what they are asking on behalf of — one film, or
 // everything a person has saved.
 const TMDB = 'https://api.themoviedb.org/3'
 
