@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
@@ -26,7 +26,6 @@ import {
   fetchFeatured,
   fetchPersonCredits,
   fetchExternalRatings,
-  industryLang,
   matchesIndustry,
   personStats,
   ratingShortlist,
@@ -144,10 +143,10 @@ export default function App() {
   // language, so a mislabelled credit cannot masquerade as a crossover. Vijay's
   // Chandralekha is filed by TMDB as an English film made in the US; it is a
   // Tamil film, and two votes is not evidence of a Hollywood career.
-  const lang = industryLang(industry)
+  const activeIndustry = INDUSTRIES.find((i) => i.id === industry) || null
   const homeLang = person && credits.length ? dominantLanguage(credits) : null
   const visibleResults = (person ? credits : results).filter(
-    (r) => (media === 'all' || r.mediaType === media) && matchesIndustry(r, lang, homeLang)
+    (r) => (media === 'all' || r.mediaType === media) && matchesIndustry(r, activeIndustry, homeLang)
   )
 
   // Typing a language name is a request to browse it, not to find a title by
@@ -174,7 +173,7 @@ export default function App() {
   // would be requested for Hindi.
   useEffect(() => {
     setPage(1)
-  }, [browseIndustry?.lang, media, sort])
+  }, [browseIndustry?.id, media, sort])
 
   useEffect(() => {
     if (!browseMode) { setBrowse([]); setHasMore(false); return }
@@ -182,7 +181,7 @@ export default function App() {
     const first = page === 1
     if (first) setBrowsing(true); else setLoadingMore(true)
 
-    discoverByLanguage(browseIndustry.lang, media, sort, page)
+    discoverByLanguage(browseIndustry, media, sort, page)
       .then(({ items, hasMore }) => {
         if (cancelled) return
         setBrowse((prev) => (first ? items : mergeDiscovered(prev, items, sort)))
@@ -195,7 +194,7 @@ export default function App() {
         setLoadingMore(false)
       })
     return () => { cancelled = true }
-  }, [browseMode, browseIndustry?.lang, media, sort, page])
+  }, [browseMode, browseIndustry?.id, media, sort, page])
 
   // Computed from the unfiltered credits — these are career totals, not a count
   // of whatever survives the filters below.
@@ -400,6 +399,53 @@ function SignatureFooter() {
   )
 }
 
+// Watches an invisible marker near the end of the grid and asks for the next
+// page when it comes into view.
+//
+// An IntersectionObserver rather than a scroll handler: the browser reports the
+// one moment that matters instead of the app recomputing a position on every
+// frame of every scroll, which on a phone is the difference between a smooth
+// list and a warm one.
+//
+// `busy` matters more than it looks. The observer fires again the instant the
+// marker is still visible after a page lands — which it usually is, since a new
+// row does not always push it off screen — so without a guard a fast connection
+// would walk through five pages before anybody had read one.
+function InfiniteSentinel({ onReach, busy }) {
+  const ref = useRef(null)
+  // Held in a ref so a new callback identity on every render does not tear the
+  // observer down and rebuild it.
+  const reach = useRef(onReach)
+  reach.current = onReach
+
+  // Rebuilt each time a load finishes, and that is the whole trick.
+  //
+  // An IntersectionObserver reports *changes* in visibility, not visibility. A
+  // page of results is often not tall enough to push the marker back out of a
+  // 600px margin, so after the first automatic load the marker is still visible,
+  // nothing has changed, and no second event ever arrives — the list loads once
+  // and then quietly stops until you scroll away and come back. Observing a node
+  // delivers an immediate callback with its current state, so tearing the
+  // observer down while a page is in flight and starting a fresh one afterwards
+  // asks the question again and chains correctly. It settles on its own: once
+  // the marker really is out of range, the fresh observer simply says so.
+  useEffect(() => {
+    const node = ref.current
+    if (!node || busy || typeof IntersectionObserver === 'undefined') return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) reach.current() },
+      // A screenful of margin, so the request starts before the reader arrives
+      // rather than after they have run out of grid and noticed.
+      { rootMargin: '600px 0px' }
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [busy])
+
+  return <div ref={ref} aria-hidden="true" style={{ height: 1 }} />
+}
+
 // Everything in a language, rather than rails of what happens to be popular.
 function BrowseGrid({
   label, note, items, loading, sort, onSort, typed,
@@ -421,7 +467,7 @@ function BrowseGrid({
       {/* Typed searches default to A–Z and chips to popular, but neither choice
           should be a dead end once you are looking at the results. */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
-        {[['alpha', 'A–Z'], ['popular', 'Most popular']].map(([id, text]) => {
+        {[['popular', 'Most popular'], ['rated', 'Top rated'], ['alpha', 'A–Z']].map(([id, text]) => {
           const active = sort === id
           return (
             <button
@@ -463,26 +509,19 @@ function BrowseGrid({
         ))}
       </div>
 
-      {/* Only shown while there is genuinely more, so it never fetches nothing
-          and looks broken. The count doubles as the end marker. */}
+      {/* The next page loads itself as you reach the bottom. The sentinel is
+          watched rather than the scroll position, so nothing runs on every
+          frame of a scroll, and it is placed a screenful early so the next row
+          is usually there before the last one has been read. */}
       {items.length > 0 && (
         <div style={{ textAlign: 'center', padding: '2rem 0 0.5rem' }}>
           {hasMore ? (
-            <button
-              onClick={onLoadMore}
-              disabled={loadingMore}
-              style={{
-                padding: '11px 26px', borderRadius: 999,
-                border: '1px solid rgba(168,85,247,0.35)',
-                background: loadingMore ? 'transparent'
-                  : 'linear-gradient(100deg, var(--magenta), var(--violet))',
-                color: loadingMore ? 'var(--text-dim)' : '#fff',
-                fontWeight: 600, fontSize: 14,
-                cursor: loadingMore ? 'default' : 'pointer',
-              }}
-            >
-              {loadingMore ? 'Loading…' : 'Load more'}
-            </button>
+            <>
+              <InfiniteSentinel onReach={onLoadMore} busy={loadingMore} />
+              <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>
+                {loadingMore ? 'Loading more…' : ' '}
+              </p>
+            </>
           ) : (
             <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>
               That’s all {items.length} of them.
