@@ -95,8 +95,44 @@ export const INDUSTRIES = [
 export const industryLang = (id) =>
   INDUSTRIES.find((i) => i.id === id)?.lang || null
 
-export const matchesIndustry = (item, lang) =>
-  !lang || item.original_language === lang
+// A credit that contradicts the rest of an actor's career, and that almost
+// nobody has voted on, is a mislabelled record rather than a foreign-language
+// role.
+//
+// TMDB has the 1948-and-1995 Tamil film Chandralekha filed as English, made in
+// the US. Its own overview reads "starring by vijay and Vanitha vijayakumar" and
+// its cast is Vijay, Ponnambalam and Sarath Babu — but the language field says
+// en, so filtering Vijay's filmography by Hollywood produced a Tamil film. There
+// is nothing else in the record to catch it with: origin_country says US too.
+//
+// What does catch it is the company it keeps. Vijay has 71 Tamil credits and two
+// claiming English, with 2 votes and 0 votes between them; Chandralekha's
+// runtime is recorded as zero. A real crossover credit looks nothing like that —
+// his Hindi role in Rowdy Rathore carries 122 votes and stays exactly where it
+// belongs. So a cross-industry credit has to clear a low bar of having been
+// noticed by anybody at all.
+const MIN_CROSSOVER_VOTES = 10
+
+export const matchesIndustry = (item, lang, homeLang = null) => {
+  if (!lang) return true
+  if (item.original_language !== lang) return false
+  if (homeLang && lang !== homeLang && (item.vote_count || 0) < MIN_CROSSOVER_VOTES) {
+    return false
+  }
+  return true
+}
+
+// The language an actor actually works in, by weight of credits. Used to decide
+// which of their credits are plausible crossovers and which are data entry.
+export function dominantLanguage(items) {
+  const tally = {}
+  for (const item of items) {
+    if (item.original_language) {
+      tally[item.original_language] = (tally[item.original_language] || 0) + 1
+    }
+  }
+  return Object.entries(tally).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+}
 
 // Typing "tamil" means "show me Tamil films", not "find a title called tamil",
 // which is what a title search would do. Both the language and the industry
@@ -183,6 +219,33 @@ export function mergeDiscovered(previous, incoming, sort) {
   return sort === 'alpha' ? merged.sort(byTitle) : merged
 }
 
+// What to call an actor by, in one line.
+//
+// TMDB's known_for is ordered by raw vote count, which asks the wrong question
+// for anyone outside Hollywood: it answers "which of their films did the largest
+// audience rate" rather than "which of their films are they known for". Ajith
+// Kumar comes back as "Aśoka" — a Hindi picture he appeared in — ahead of
+// Mankatha, purely because Bollywood's audience on TMDB is larger than
+// Kollywood's.
+//
+// This is the same correction the actor stats header already makes, applied in
+// the second place it was needed and missed. The films are narrowed to whichever
+// industry most of them come from, then ordered by how many people turned out
+// for them rather than by the raw count.
+function representativeWork(knownFor) {
+  const films = (knownFor || []).filter((k) => k.title || k.name)
+  if (!films.length) return []
+
+  const home = dominantLanguage(films)
+  const pool = home ? films.filter((f) => f.original_language === home) : films
+
+  return (pool.length ? pool : films)
+    .slice()
+    .sort((a, b) => publicOpinion(b) - publicOpinion(a))
+    .map((k) => k.title || k.name)
+    .slice(0, 2)
+}
+
 // One request returns titles and people both. Titles feed the grid; people feed
 // the actor row, which is why they are kept rather than discarded.
 export async function searchMulti(query) {
@@ -198,10 +261,7 @@ export async function searchMulti(query) {
       id: p.id,
       name: p.name,
       profile_path: p.profile_path,
-      knownFor: (p.known_for || [])
-        .map((k) => k.title || k.name)
-        .filter(Boolean)
-        .slice(0, 2),
+      knownFor: representativeWork(p.known_for),
     }))
   return { titles, people }
 }
