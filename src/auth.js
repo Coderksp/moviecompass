@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { clearPersonalCache } from './api/profile'
 
 // Session state, backed by the API rather than the browser.
 //
@@ -16,7 +17,12 @@ const listeners = new Set()
 let state = { status: 'loading', user: null }
 
 function set(next) {
+  const changed = next.user?.id !== state.user?.id
   state = next
+  // Anything personalised was fetched for whoever was signed in a moment ago.
+  // Keeping it across a change of account would show one person's taste to the
+  // next, which on a shared laptop is the whole problem.
+  if (changed) clearPersonalCache()
   listeners.forEach((fn) => fn())
 }
 

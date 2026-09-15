@@ -18,6 +18,18 @@ export const STATEMENTS = [
      created_at    timestamptz not null default now()
    )`,
 
+  // A person's own name and picture, as their provider gave them.
+  //
+  // `username` is a handle derived from the email or display name and made
+  // unique with a numeric suffix, which makes it the wrong thing to greet
+  // somebody by — signing in with Google as "Sugan Prasath" could leave you
+  // being called "suganprasath3". These are added rather than folded into
+  // username because the handle still has to be unique and these must not be.
+  //
+  // Both are null for a password account, which has no provider to ask.
+  `alter table users add column if not exists display_name text`,
+  `alter table users add column if not exists avatar_url text`,
+
   // Case-insensitive uniqueness without the citext extension: "Sugan" and
   // "sugan" must not be two accounts, or one could impersonate the other.
   `create unique index if not exists users_username_lower_idx on users (lower(username))`,

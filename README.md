@@ -14,6 +14,8 @@ A colorful, animated movie discovery web app where **trailers play inline when y
 ## ✨ Features
 
 - **"More like this"** — open any title and the app works out what to watch next, and tells you *why* in one line under each poster.
+- **"For you"** — sign in and the home page leads with a rail built from a model of your own taste, each pick captioned with the reason it is there.
+- **Profiles** — your name and picture, your counts, and a readable breakdown of the genres, languages and film-makers your recommendations are built from.
 - **Hover-to-play trailers** — hover any movie poster and its YouTube trailer fades in and plays, muted and looping, right inside the card.
 - **Live search** — debounced search across the full TMDB catalogue with an animated results grid.
 - **Curated rails** — trending, critically acclaimed, action, sci-fi, comedy, horror and more, each in a smooth horizontal scroller.
@@ -85,12 +87,15 @@ to deploy with only `TMDB_API_KEY` and add the rest later.
 src/
 ├── api/tmdb.js          # TMDB client: categories, featured, trailers, search
 ├── api/recommend.js     # Client for the recommendation endpoint
+├── api/profile.js       # Client for the profile and "for you" endpoints
 ├── components/
 │   ├── Navbar.jsx       # Logo + debounced live search
 │   ├── Hero.jsx         # Featured film with staggered entrance
 │   ├── Row.jsx          # Horizontal scrolling rail
 │   ├── MovieCard.jsx    # ⭐ Hover-to-play trailer card (the core feature)
 │   ├── SimilarTitles.jsx # "More like this" rail inside the modal
+│   ├── ForYouRow.jsx    # The curated home-page rail
+│   ├── Profile.jsx      # Profile screen + taste breakdown
 │   └── SearchResults.jsx
 ├── App.jsx              # Layout + data loading
 └── index.css           # Theme tokens + ambient background
@@ -139,6 +144,32 @@ actually fired — so it can never claim a connection the model did not score. S
 `ANTHROPIC_API_KEY` and **Claude** rewrites those into something readable, given
 only the connections already found rather than being asked what is similar. With
 no key the plainer version ships and nothing else changes.
+
+## 👤 How "For you" works
+
+The same engine, asked a different question. `/api/similar` compares candidates
+against one film; `/api/for-you` compares them against *you*.
+
+Your library is collapsed into a single weighted taste profile. The signals are
+not equal and are not all positive: a favourite counts full, a rating scales from
++1 at 10 down through neutral at 6 to a **negative** weight below that, and a
+watchlist entry counts least, because it records intent rather than a verdict —
+nobody has watched it yet.
+
+Your four strongest titles then seed the same five candidate generators, tagged
+so each result remembers which of your films led to it. That provenance is what
+makes the caption specific: *"Lokesh Kanagaraj, who made Vikram"* rather than
+*"you might like this"*. Candidates are scored against the whole profile —
+keyword, people, genre, language, era and audience affinity — and anything you
+have already saved, rated or watched is removed.
+
+Every caption names the title a person is actually in, looked up rather than
+assumed. An earlier version paired the top-rated film with whichever actor
+matched and confidently reported *"Laurence Fishburne, as in Inception"*.
+
+Your profile screen shows the resulting model back to you — the genres,
+languages, film-makers and era it learned — because a recommender that will not
+show its reasoning is asking to be trusted for nothing.
 
 ## 💡 How hover-to-play works
 

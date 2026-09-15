@@ -63,6 +63,9 @@ export default async function handler(req, res) {
       providerId: payload.sub,
       email,
       name: payload.name || email,
+      // Google sends these on every sign-in and they were being dropped, which
+      // is why a Google account showed up as a single letter in a circle.
+      avatar: payload.picture || null,
     })
 
     const secure = process.env.NODE_ENV === 'production' ? ' Secure;' : ''

@@ -156,6 +156,10 @@ export function profile(data, mediaType) {
     // Films carry genre objects when fetched whole and bare ids in a list.
     genres: data.genres ? ids(data.genres) : new Set(data.genre_ids || []),
     genreNames: (data.genres || []).map((g) => g.name),
+    // Keyed as well as listed. The array is what the captions read from; the map
+    // is what anything aggregating across several titles needs, since matching
+    // names to ids by array position only works while both stay in step.
+    genreNameById: new Map((data.genres || []).map((g) => [g.id, g.name])),
 
     keywords: new Set(kw.map((k) => k.id)),
     keywordNames: new Map(kw.map((k) => [k.id, k.name])),
@@ -220,17 +224,23 @@ export const SOURCE_WEIGHTS = {
 
 export const candidateKey = (item) => `${item.mediaType || 'movie'}:${item.id}`
 
-// lists: [{ source, items }] — returns one entry per unique title, carrying the
-// fused prior and which generators produced it.
+// lists: [{ source, items, seed }] — returns one entry per unique title,
+// carrying the fused prior and which generators produced it.
+//
+// `seed` is optional and only the personalised rail uses it. There, the same
+// generators are run once per title somebody already likes, and knowing which of
+// those turned up a candidate is what lets the caption say "because you loved
+// Vikram" rather than something vague about Tamil thrillers.
 export function fuse(lists) {
   const pool = new Map()
 
-  for (const { source, items } of lists) {
+  for (const { source, items, seed } of lists) {
     const weight = SOURCE_WEIGHTS[source] ?? 0.5
     items.forEach((item, i) => {
       const k = candidateKey(item)
-      const entry = pool.get(k) || { item, sources: new Set(), prior: 0 }
+      const entry = pool.get(k) || { item, sources: new Set(), seeds: new Set(), prior: 0 }
       entry.sources.add(source)
+      if (seed) entry.seeds.add(seed)
       entry.prior += weight / (RRF_K + i + 1)
       // A fuller record wins: a title that arrived from two generators should
       // keep whichever copy carries more fields.

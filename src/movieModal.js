@@ -15,3 +15,9 @@ export const useOpenPerson = () => useContext(OpenPersonContext)
 // exists, let alone how to open it.
 export const RequestSignInContext = createContext(() => {})
 export const useRequestSignIn = () => useContext(RequestSignInContext)
+
+// Opening the profile panel from wherever the avatar happens to live. Same shape
+// as the sign-in request above: the navbar should not have to know that a profile
+// screen exists, let alone how it is mounted.
+export const OpenProfileContext = createContext(() => {})
+export const useOpenProfile = () => useContext(OpenProfileContext)

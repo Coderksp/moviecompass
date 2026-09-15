@@ -25,7 +25,7 @@ Things that turned out to be needed once the app met the real world.
 - [ ] **Genre filter chips** — filterable pills above the rails to jump to a genre.
 - [ ] **Sort controls** — sort rails/search by popularity, rating, release date, or A–Z.
 - [ ] **Advanced filters** — year range, minimum rating, runtime. *(Language shipped; the rest have not.)*
-- [ ] **"Because you watched…" rail** — recommendations based on the last movie viewed.
+- [x] **"For you" rail** — a curated home-page rail built from a weighted model of everything you have rated, hearted and saved. *(Went further than "the last movie viewed": one taste profile across the whole library, so it reflects what you like rather than what you last clicked.)*
 - [ ] **Infinite scroll / "Load more"** on rails and search results. *(Browse grids are capped at one page.)*
 - [ ] **Trending toggle** — switch between "Trending today" and "Trending this week".
 - [x] **TV shows** — extend beyond movies to include series (TMDB `/tv` endpoints).
@@ -36,6 +36,7 @@ Things that turned out to be needed once the app met the real world.
 - [x] **Favorites / likes** — heart a title and see a "Your favourites" rail.
 - [ ] **"Seen it" tracking** — mark titles watched and dim them in rails.
 - [x] **User ratings** — rate on your own 1–10 scale.
+- [x] **Profiles** — your name and picture from Google, counts, and a readable breakdown of the taste the recommender actually learned.
 - [ ] **Continue browsing** — remember scroll position and last-viewed titles.
 - [ ] **Rank an actor's films by _your_ ratings** — the data is already stored; the ranking still uses TMDB's public score.
 
