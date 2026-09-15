@@ -294,6 +294,7 @@ export default function App() {
               onPerson={openPerson}
               onClearPerson={() => setPerson(null)}
               decades={decades}
+              creditTotal={narrowed.length}
               decade={decade}
               onDecade={setDecade}
               order={creditOrder}
