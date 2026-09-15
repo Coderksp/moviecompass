@@ -6,8 +6,10 @@ import Row from './components/Row'
 import SearchResults from './components/SearchResults'
 import MovieModal from './components/MovieModal'
 import MovieCard from './components/MovieCard'
-import { MovieModalContext, OpenPersonContext, RequestSignInContext } from './movieModal'
+import { MovieModalContext, OpenPersonContext, RequestSignInContext, OpenProfileContext } from './movieModal'
 import SignIn from './components/SignIn'
+import Profile from './components/Profile'
+import ForYouRow from './components/ForYouRow'
 import { useSession } from './auth'
 import { useLibrary, loadLibrary, clearLibrary } from './library'
 import { fetchMovieDetails, IMG } from './api/tmdb'
@@ -34,6 +36,7 @@ export default function App() {
   const session = useSession()
   const library = useLibrary()
   const [signInOpen, setSignInOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [castPickerOpen, setCastPickerOpen] = useState(false)
   const [browse, setBrowse] = useState([])
   const [browsing, setBrowsing] = useState(false)
@@ -45,6 +48,7 @@ export default function App() {
   // the password form, or coming back from Google.
   useEffect(() => {
     if (session.status === 'in') setSignInOpen(false)
+    if (session.status === 'out') setProfileOpen(false)
   }, [session.status])
 
   // The library follows the session: loaded when you sign in, dropped when you
@@ -194,6 +198,7 @@ export default function App() {
     <MovieModalContext.Provider value={setSelected}>
     <OpenPersonContext.Provider value={openPerson}>
     <RequestSignInContext.Provider value={() => setSignInOpen(true)}>
+    <OpenProfileContext.Provider value={() => setProfileOpen(true)}>
     <div className="app">
       <div className="aurora"><span /><span /><span /></div>
       <Navbar onSearch={handleSearch} />
@@ -270,7 +275,9 @@ export default function App() {
           <motion.main key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <Hero movie={featured} />
             <div style={{ marginTop: '-2rem', position: 'relative', zIndex: 2 }}>
-              {/* Your own rails first — what you saved outranks what is trending. */}
+              {/* Picked for you first, then what you saved, then what is
+                  trending — narrowing outward from this person to everyone. */}
+              <ForYouRow />
               <LibraryRow title="Your watchlist" field="watchlist" library={library} />
               <LibraryRow title="Your favourites" field="favourite" library={library} />
               {visibleCategories.map((cat) => (
@@ -296,7 +303,10 @@ export default function App() {
       <MovieModal movie={selected} onClose={() => setSelected(null)} />
 
       {signInOpen && <SignIn onClose={() => setSignInOpen(false)} />}
+
+      {profileOpen && <Profile onClose={() => setProfileOpen(false)} />}
     </div>
+    </OpenProfileContext.Provider>
     </RequestSignInContext.Provider>
     </OpenPersonContext.Provider>
     </MovieModalContext.Provider>

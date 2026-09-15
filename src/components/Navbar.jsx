@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { IMG, searchMulti } from '../api/tmdb'
-import { useUser, signOut } from '../auth'
-import { useRequestSignIn } from '../movieModal'
+import { useUser } from '../auth'
+import { useRequestSignIn, useOpenProfile } from '../movieModal'
 
 export default function Navbar({ onSearch }) {
   const [scrolled, setScrolled] = useState(false)
@@ -266,11 +266,18 @@ export default function Navbar({ onSearch }) {
   )
 }
 
-// Signed in: the initial, doubling as the way back out. Signed out: a way in.
+// Signed in: your picture, and the way into your profile. Signed out: a way in.
 // A single circle costs almost no width beside the search box on a phone.
+//
+// It used to sign you out on click, which put an irreversible action under an
+// unlabelled button — and made the profile unreachable, since there was nowhere
+// else to put it. Signing out now lives inside the profile panel, one step
+// further from an accidental tap.
 function SignOutChip() {
   const user = useUser()
   const requestSignIn = useRequestSignIn()
+  const openProfile = useOpenProfile()
+  const [broken, setBroken] = useState(false)
 
   if (!user) {
     return (
@@ -289,25 +296,37 @@ function SignOutChip() {
     )
   }
 
-  const initial = (user.username || user.name || '?').trim().charAt(0).toUpperCase()
+  const name = user.name || user.username
+  const initial = (name || '?').trim().charAt(0).toUpperCase()
 
   return (
     <button
-      onClick={signOut}
-      // The API returns `username`; `name` was the demo store's field and would
-      // render "Signed in as undefined" here.
-      title={`Signed in as ${user.username} — sign out`}
-      aria-label={`Signed in as ${user.username}. Sign out.`}
+      onClick={openProfile}
+      title={`${name} — your profile`}
+      aria-label={`Signed in as ${name}. Open your profile.`}
       style={{
         marginLeft: 10, flex: 'none', width: 34, height: 34, borderRadius: '50%',
-        display: 'grid', placeItems: 'center', cursor: 'pointer',
+        display: 'grid', placeItems: 'center', cursor: 'pointer', overflow: 'hidden',
+        padding: 0,
         border: '1px solid rgba(168,85,247,0.4)',
         background: 'linear-gradient(120deg, rgba(255,46,147,0.22), rgba(168,85,247,0.22))',
         color: 'var(--text)', fontFamily: 'var(--font-display)',
         fontWeight: 800, fontSize: 14, lineHeight: 1,
       }}
     >
-      {initial}
+      {/* A provider image that fails to load must not leave a broken-image icon
+          where a face should be — that reads as a broken account. */}
+      {user.avatar && !broken ? (
+        <img
+          src={user.avatar}
+          alt=""
+          referrerPolicy="no-referrer"
+          onError={() => setBroken(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      ) : (
+        initial
+      )}
     </button>
   )
 }
