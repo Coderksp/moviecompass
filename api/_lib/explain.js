@@ -59,7 +59,19 @@ async function captions(system, payload) {
   if (!process.env.ANTHROPIC_API_KEY) return null
 
   const { default: Anthropic } = await import('@anthropic-ai/sdk')
-  const client = new Anthropic({ timeout: CLAUDE_TIMEOUT, maxRetries: 0 })
+
+  // An organisation-level key has to say which workspace to bill and scope the
+  // request to; a workspace-scoped key already carries that and needs nothing.
+  // Without this the first kind fails with a 400 that says exactly so, which is
+  // a poor welcome for someone who has just pasted in a key that looks fine.
+  const workspace = process.env.ANTHROPIC_WORKSPACE_ID
+  const client = new Anthropic({
+    timeout: CLAUDE_TIMEOUT,
+    maxRetries: 0,
+    ...(workspace
+      ? { defaultHeaders: { 'anthropic-workspace-id': workspace } }
+      : {}),
+  })
 
   const response = await client.messages.create({
     model: 'claude-opus-5',
