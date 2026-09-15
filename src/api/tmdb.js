@@ -398,6 +398,77 @@ export async function fetchExternalRatings(ids) {
   return p
 }
 
+// ---------------------------------------------------------------------------
+// Ordering and grouping a filmography
+// ---------------------------------------------------------------------------
+
+const yearOf = (item) => {
+  const y = Number(String(item.release_date || item.first_air_date || '').slice(0, 4))
+  return Number.isFinite(y) && y > 1880 ? y : null
+}
+
+// The decades an actor actually worked in, newest first, each with its count.
+//
+// Built from the filmography rather than from a fixed list of decades, so the
+// chips describe the career in front of you: Vijay gets the 1980s through the
+// 2020s, and Ajith Kumar — who started in 1990 — is never offered an empty
+// 1980s to click on.
+//
+// Undated credits are counted nowhere. TMDB carries a handful per career, and
+// an "Unknown" chip that is empty for almost everybody is worse than leaving
+// them to the "All" view, where they still appear.
+export function decadesOf(items) {
+  const tally = new Map()
+  for (const item of items) {
+    const y = yearOf(item)
+    if (y == null) continue
+    const decade = Math.floor(y / 10) * 10
+    tally.set(decade, (tally.get(decade) || 0) + 1)
+  }
+  return [...tally.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([decade, count]) => ({ decade, count, label: `${decade}s` }))
+}
+
+export const inDecade = (item, decade) => {
+  if (decade == null) return true
+  const y = yearOf(item)
+  return y != null && y >= decade && y < decade + 10
+}
+
+export const CREDIT_ORDERS = [
+  // The order credits already arrived in, and still the default — the
+  // recognisable work leads, which is what somebody who has just opened an
+  // actor is usually looking for.
+  { id: 'known', label: 'Most known' },
+  { id: 'new', label: 'Newest first' },
+  { id: 'old', label: 'Oldest first' },
+  { id: 'rated', label: 'Top rated' },
+]
+
+// Sorting by raw average would hand the top of a career to whatever carries
+// three votes: Vijay's Ithu Engal Neethi sits at 10.0 on a handful of them,
+// ahead of Mersal. The same vote-weighted score the career header uses settles
+// it, for the same reason.
+export function orderCredits(items, order) {
+  const list = [...items]
+  if (order === 'rated') return list.sort((a, b) => publicOpinion(b) - publicOpinion(a))
+  if (order === 'new' || order === 'old') {
+    const direction = order === 'new' ? -1 : 1
+    return list.sort((a, b) => {
+      const ya = yearOf(a)
+      const yb = yearOf(b)
+      // A credit with no date has no place on a timeline, so it goes last in
+      // either direction rather than pretending to be very old or very new.
+      if (ya == null && yb == null) return 0
+      if (ya == null) return 1
+      if (yb == null) return -1
+      return (ya - yb) * direction
+    })
+  }
+  return list.sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
+}
+
 // Everything an actor appears in, films and series together. TMDB lists a title
 // once per credited role, so the same show can appear several times — deduped
 // by type and id, then ordered by popularity so the recognisable work leads.

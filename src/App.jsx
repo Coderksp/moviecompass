@@ -19,6 +19,9 @@ import {
   MEDIA_FILTERS,
   discoverByLanguage,
   dominantLanguage,
+  decadesOf,
+  inDecade,
+  orderCredits,
   matchLanguageQuery,
   mergeDiscovered,
   searchMulti as searchPeopleFor,
@@ -69,6 +72,9 @@ export default function App() {
   const [industry, setIndustry] = useState('all')
   const [person, setPerson] = useState(null)      // the actor being browsed
   const [credits, setCredits] = useState([])
+  // Which decade of a career is on screen, and in what order. Null is "all".
+  const [decade, setDecade] = useState(null)
+  const [creditOrder, setCreditOrder] = useState('known')
   const [ratings, setRatings] = useState(null)    // external scores, when available
 
   // Rails for every type load once; the filter only decides what is shown, so
@@ -123,6 +129,8 @@ export default function App() {
     setPerson(p)
     setCredits([])
     setRatings(null)
+    setDecade(null)
+    setCreditOrder('known')
     try {
       const items = await fetchPersonCredits(p.id)
       setCredits(items)
@@ -145,9 +153,21 @@ export default function App() {
   // Tamil film, and two votes is not evidence of a Hollywood career.
   const activeIndustry = INDUSTRIES.find((i) => i.id === industry) || null
   const homeLang = person && credits.length ? dominantLanguage(credits) : null
-  const visibleResults = (person ? credits : results).filter(
+  const narrowed = (person ? credits : results).filter(
     (r) => (media === 'all' || r.mediaType === media) && matchesIndustry(r, activeIndustry, homeLang)
   )
+
+  // The decade and order controls belong to a filmography and only appear there,
+  // so a plain title search is left exactly as it was.
+  //
+  // The chips are counted after the other filters rather than before, so the
+  // number on each one is the number you get when you press it — narrowing to
+  // Kollywood and then seeing "2000s 26" when only 24 of those are Tamil would
+  // be a small lie told repeatedly.
+  const visibleResults = person
+    ? orderCredits(narrowed.filter((r) => inDecade(r, decade)), creditOrder)
+    : narrowed
+  const decades = person ? decadesOf(narrowed) : []
 
   // Typing a language name is a request to browse it, not to find a title by
   // that name — "tamil" as a title search returns nothing anyone wants.
@@ -273,6 +293,11 @@ export default function App() {
               stats={stats}
               onPerson={openPerson}
               onClearPerson={() => setPerson(null)}
+              decades={decades}
+              decade={decade}
+              onDecade={setDecade}
+              order={creditOrder}
+              onOrder={setCreditOrder}
               industry={industry}
               onIndustry={setIndustry}
             />
