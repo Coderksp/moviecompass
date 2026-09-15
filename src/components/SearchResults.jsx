@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion'
 import MovieCard from './MovieCard'
-import { IMG, INDUSTRIES } from '../api/tmdb'
+import { IMG, INDUSTRIES, CREDIT_ORDERS } from '../api/tmdb'
 
 export default function SearchResults({
   query, results, people = [], person, stats, onPerson, onClearPerson,
   industry = 'all', onIndustry,
+  decades = [], decade = null, onDecade, order = 'known', onOrder,
 }) {
   return (
     <section style={{ padding: '6.5rem clamp(1rem, 4vw, 3rem) 3rem', minHeight: '80vh' }}>
@@ -38,6 +39,20 @@ export default function SearchResults({
       )}
 
       {person && stats && <ActorStats person={person} stats={stats} />}
+
+      {/* A career is long enough that "everything, most famous first" stops
+          being a useful way to look at it. Only shown for an actor, and only
+          once there is more than one decade to choose between. */}
+      {person && decades.length > 1 && (
+        <CareerFilters
+          decades={decades}
+          decade={decade}
+          onDecade={onDecade}
+          order={order}
+          onOrder={onOrder}
+          total={decades.reduce((n, d) => n + d.count, 0)}
+        />
+      )}
 
       {/* The industry chips used to live here. They moved to the filter bar so
           they can be browsed with rather than only narrowing an existing search;
@@ -112,6 +127,79 @@ export default function SearchResults({
         </div>
       )}
     </section>
+  )
+}
+
+// Decade and order, for a filmography.
+//
+// The decade chips carry their counts because the counts are the interesting
+// part — they show the shape of a career at a glance, where the working years
+// were and where they thinned out, before anything is clicked.
+function CareerFilters({ decades, decade, onDecade, order, onOrder, total }) {
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <Row label="Decade">
+        <Chip on={decade === null} onClick={() => onDecade(null)}>
+          All <Count on={decade === null}>{total}</Count>
+        </Chip>
+        {decades.map((d) => (
+          <Chip key={d.decade} on={decade === d.decade} onClick={() => onDecade(d.decade)}>
+            {d.label} <Count on={decade === d.decade}>{d.count}</Count>
+          </Chip>
+        ))}
+      </Row>
+
+      <Row label="Order">
+        {CREDIT_ORDERS.map((o) => (
+          <Chip key={o.id} on={order === o.id} onClick={() => onOrder(o.id)}>
+            {o.label}
+          </Chip>
+        ))}
+      </Row>
+    </div>
+  )
+}
+
+function Row({ label, children }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <p style={{
+        fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase',
+        color: 'var(--text-dim)', margin: '0 0 7px', opacity: 0.8,
+      }}>
+        {label}
+      </p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{children}</div>
+    </div>
+  )
+}
+
+function Chip({ on, children, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={on}
+      style={{
+        padding: '5px 13px', borderRadius: 999, cursor: 'pointer',
+        fontSize: 12.5, fontWeight: 600,
+        color: on ? '#fff' : 'var(--text-dim)',
+        background: on
+          ? 'linear-gradient(100deg, var(--magenta), var(--violet))'
+          : 'rgba(26,16,41,0.7)',
+        border: on ? '1px solid transparent' : '1px solid rgba(168,85,247,0.25)',
+        transition: 'color .2s, background .2s, border-color .2s',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+// Dimmed against its own chip rather than coloured separately, so the count
+// reads as part of the label instead of competing with it.
+function Count({ on, children }) {
+  return (
+    <span style={{ opacity: on ? 0.75 : 0.6, fontWeight: 500 }}>{children}</span>
   )
 }
 

@@ -29,7 +29,7 @@ Things that turned out to be needed once the app met the real world.
 - [x] **Infinite scroll** on browse grids — the next page loads itself as you reach the bottom, watched with an IntersectionObserver rather than a scroll handler.
 - [ ] **Trending toggle** — switch between "Trending today" and "Trending this week".
 - [x] **TV shows** — extend beyond movies to include series (TMDB `/tv` endpoints).
-- [x] **Person pages** — click an actor/director to see their filmography.
+- [x] **Person pages** — click an actor/director to see their filmography, sliced by decade and ordered by fame, date or rating.
 
 ## ❤️ Personalization
 - [x] **Watchlist** — save titles to a personal list. *(Postgres rather than `localStorage`, so it follows you between devices.)*
