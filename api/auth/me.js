@@ -1,4 +1,4 @@
-import { readToken, applyCors } from '../_lib/session.js'
+import { readToken, clearSessionCookie, applyCors } from '../_lib/session.js'
 import { sql } from '../_lib/db.js'
 
 // The session cookie is httpOnly, so the client cannot read it to find out who
@@ -9,9 +9,21 @@ import { sql } from '../_lib/db.js'
 // whatever was true a month ago. So the display details are read from the
 // database on each check, and changing your Google picture is reflected the next
 // time the app loads rather than the next time your session expires.
+// The session, as a thing rather than two verbs. GET reads it; DELETE ends it.
+//
+// Ending it used to be its own function at /api/auth/logout. It was folded in
+// here when the project hit Vercel's twelve-function ceiling, and the pairing is
+// honest enough to keep regardless: this route is the session, and signing out
+// is deleting it. DELETE rather than GET for the same reason logout was POST —
+// nobody should be signed out by something prefetching a link.
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(204).end()
+
+  if (req.method === 'DELETE' || req.method === 'POST') {
+    clearSessionCookie(res)
+    return res.status(200).json({ ok: true })
+  }
 
   try {
     const token = await readToken(req)

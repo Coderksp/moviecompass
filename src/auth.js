@@ -26,9 +26,9 @@ function set(next) {
   listeners.forEach((fn) => fn())
 }
 
-async function call(path, body) {
+async function call(path, body, method) {
   const res = await fetch(path, {
-    method: body ? 'POST' : 'GET',
+    method: method || (body ? 'POST' : 'GET'),
     credentials: 'include',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -62,7 +62,8 @@ export async function register(username, password) {
 }
 
 export async function signOut() {
-  try { await call('/api/auth/logout', {}) } catch {}
+  // The session is a resource at /api/auth/me; signing out deletes it.
+  try { await call('/api/auth/me', null, 'DELETE') } catch {}
   // Clear locally even if the request failed — the cookie may already be gone,
   // and leaving someone apparently signed in after they asked to leave is worse.
   set({ status: 'out', user: null })

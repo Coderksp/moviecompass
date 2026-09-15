@@ -4,10 +4,13 @@
 // asks to be trusted for no reason, and "we think you like Tamil thrillers by
 // Lokesh Kanagaraj, mostly from the last five years" is both checkable and
 // correctable — if it is wrong, the fix is visible: rate something.
-import { sql } from './_lib/db.js'
-import { requireUser, applyCors } from './_lib/session.js'
-import { tasteSummary } from './_lib/taste.js'
-import { viewerTaste, fingerprintOf, MIN_SIGNALS } from './_lib/viewer.js'
+//
+// Under _lib for the same reason as ./foryou.js: one route, /api/you, serves
+// both, because the Hobby plan allows twelve functions and this project is at
+// twelve.
+import { sql } from './db.js'
+import { tasteSummary } from './taste.js'
+import { viewerTaste, fingerprintOf, MIN_SIGNALS } from './viewer.js'
 
 // The languages the app can browse by, which are the ones a taste is likely to
 // be expressed in. Anything else falls back to its code rather than pretending
@@ -24,20 +27,14 @@ const languageName = (code) => LANGUAGE_NAMES[code] || String(code || '').toUppe
 // The certificate scale the model reasons on, said back in words.
 const MATURITY_LABEL = ['family viewing', 'mostly PG', 'mostly PG-13', 'mostly R', 'adult']
 
-export default async function handler(req, res) {
-  applyCors(req, res)
-  if (req.method === 'OPTIONS') return res.status(204).end()
-
-  const user = await requireUser(req, res)
-  if (!user) return
-
-  try {
+export async function profileBody(user) {
+  {
     const rows = await sql`
       select id, username, email, display_name, avatar_url, created_at
       from users where id = ${user.id} limit 1
     `
     const row = rows[0]
-    if (!row) return res.status(200).json({ user: null })
+    if (!row) return { user: null }
 
     // Counts come from the whole library, not the recent slice the taste is
     // built from — these are totals somebody can check against their own rails,
@@ -73,9 +70,7 @@ export default async function handler(req, res) {
       console.error('taste summary failed:', err?.message || err)
     }
 
-    res.setHeader('Cache-Control', 'private, no-store')
-
-    return res.status(200).json({
+    return ({
       user: {
         id: row.id,
         username: row.username,
@@ -89,8 +84,5 @@ export default async function handler(req, res) {
       tasteReady: ready,
       needed: Math.max(0, MIN_SIGNALS - (counts[0]?.favourites || 0) - (counts[0]?.rated || 0)),
     })
-  } catch (err) {
-    console.error('profile failed:', err)
-    return res.status(500).json({ error: 'Could not load your profile.' })
   }
 }
