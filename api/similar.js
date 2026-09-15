@@ -27,7 +27,7 @@ import {
 } from './_lib/recommend.js'
 import { tmdb, CERTIFICATION } from './_lib/tmdb.js'
 import { generate, enrich } from './_lib/candidates.js'
-import { explainSimilar } from './_lib/explain.js'
+import { explainSimilar, describeFailure } from './_lib/explain.js'
 
 // How many survive stage one and get a full metadata lookup — one request each,
 // in parallel, and the dominant cost of the whole endpoint.
@@ -173,6 +173,7 @@ export default async function handler(req, res) {
 
     let reasons = null
     let reasonsFrom = 'rules'
+    let explainError = null
 
     if (explain && picks.length && process.env.ANTHROPIC_API_KEY) {
       try {
@@ -181,7 +182,8 @@ export default async function handler(req, res) {
       } catch (err) {
         // No key, no quota, a timeout, a bad gateway — none of it should cost
         // the visitor their recommendations.
-        console.error('claude explanation failed:', err?.message || err)
+        explainError = describeFailure(err)
+        console.error('claude explanation failed:', explainError)
       }
     }
 
@@ -221,6 +223,8 @@ export default async function handler(req, res) {
       // no key configured it could not, and the client skips a second request
       // that would re-run the entire pipeline to produce identical captions.
       canExplain: !!process.env.ANTHROPIC_API_KEY,
+      // Present only when the optional caption pass was tried and failed.
+      explainError,
       items,
     })
   } catch (err) {

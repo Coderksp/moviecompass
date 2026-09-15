@@ -13,7 +13,7 @@ import { profile, fuse, shortlist, diversify } from './recommend.js'
 import { generate, enrich } from './candidates.js'
 import { tasteScore, tasteReason, tasteConnected, because } from './taste.js'
 import { viewerTaste, fingerprintOf, MIN_SIGNALS } from './viewer.js'
-import { explainForYou } from './explain.js'
+import { explainForYou, describeFailure } from './explain.js'
 
 // How many of their titles seed the search. Each one costs a full round of
 // generator queries, and past four or five the candidates are overwhelmingly
@@ -146,6 +146,7 @@ export async function forYouBody(user) {
     const { ready, saved, picks, taste } = await cached(user.id, fingerprint)
 
     let reasons = null
+    let explainError = null
     if (ready && picks.length && process.env.ANTHROPIC_API_KEY) {
       try {
         reasons = await explainForYou(
@@ -159,7 +160,8 @@ export async function forYouBody(user) {
           picks
         )
       } catch (err) {
-        console.error('for-you explanation failed:', err?.message || err)
+        explainError = describeFailure(err)
+        console.error('for-you explanation failed:', explainError)
       }
     }
 
@@ -174,6 +176,8 @@ export async function forYouBody(user) {
       needed: Math.max(0, MIN_SIGNALS - saved),
       canExplain: !!process.env.ANTHROPIC_API_KEY,
       explained: !!reasons,
+      // Present only when the optional caption pass was tried and failed.
+      explainError,
       items: picks.map((p) => {
         const key = `${p.profile.mediaType}:${p.profile.id}`
         return {

@@ -41,6 +41,20 @@ const SCHEMA = {
   additionalProperties: false,
 }
 
+// Why the last attempt produced nothing, in a few words. The captions are an
+// optional layer, so a failure is swallowed rather than surfaced as an error —
+// which is right for the visitor and useless for whoever has to work out why the
+// feature is quietly off. This is that missing sentence.
+export function describeFailure(err) {
+  if (!err) return null
+  const status = err.status || err.statusCode
+  const detail =
+    err.error?.error?.message || err.error?.message || err.message || String(err)
+  return [status && `HTTP ${status}`, String(detail).slice(0, 300)]
+    .filter(Boolean)
+    .join(' — ')
+}
+
 async function captions(system, payload) {
   if (!process.env.ANTHROPIC_API_KEY) return null
 
