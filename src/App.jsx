@@ -18,6 +18,7 @@ import {
   INDUSTRIES,
   MEDIA_FILTERS,
   discoverByLanguage,
+  dominantLanguage,
   matchLanguageQuery,
   mergeDiscovered,
   searchMulti as searchPeopleFor,
@@ -138,9 +139,15 @@ export default function App() {
 
   // Both filters apply to whichever set is on screen — an actor's filmography
   // narrows by type and industry exactly like a title search does.
+  //
+  // Inside a filmography the industry filter also gets the actor's own home
+  // language, so a mislabelled credit cannot masquerade as a crossover. Vijay's
+  // Chandralekha is filed by TMDB as an English film made in the US; it is a
+  // Tamil film, and two votes is not evidence of a Hollywood career.
   const lang = industryLang(industry)
+  const homeLang = person && credits.length ? dominantLanguage(credits) : null
   const visibleResults = (person ? credits : results).filter(
-    (r) => (media === 'all' || r.mediaType === media) && matchesIndustry(r, lang)
+    (r) => (media === 'all' || r.mediaType === media) && matchesIndustry(r, lang, homeLang)
   )
 
   // Typing a language name is a request to browse it, not to find a title by
